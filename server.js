@@ -111,8 +111,61 @@ let db;
 
 async function initDB() {
   const SQL = await initSqlJs();
-  const buf = fs.readFileSync(DB_PATH);
-  db = new SQL.Database(buf);
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+  if (fs.existsSync(DB_PATH)) {
+    const buf = fs.readFileSync(DB_PATH);
+    db = new SQL.Database(buf);
+  } else {
+    console.log(`No database found, creating new one at ${DB_PATH}`);
+    db = new SQL.Database();
+  }
+
+  // ─── Base tables (created on first run) ───
+  db.run(`CREATE TABLE IF NOT EXISTS movementType (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    description TEXT NOT NULL
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS position (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    description TEXT NOT NULL
+  )`);
+
+  const existingPositions = db.exec('SELECT COUNT(*) FROM position');
+  if (existingPositions[0]?.values[0][0] === 0) {
+    ['Dial Up', 'Dial Down', 'Crown Up', 'Crown Down', 'Crown Left', 'Crown Right'].forEach(desc => {
+      db.run('INSERT INTO position (description) VALUES (?)', [desc]);
+    });
+  }
+
+  db.run(`CREATE TABLE IF NOT EXISTS movement (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    manufacturer TEXT,
+    jewels INTEGER,
+    movementType INTEGER REFERENCES movementType(id),
+    caliber TEXT,
+    frequency INTEGER,
+    liftAngle INTEGER,
+    launchYear INTEGER
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS watch (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    yearMade INTEGER,
+    serialNumber TEXT,
+    dialColor TEXT,
+    notes TEXT,
+    movement INTEGER REFERENCES movement(id),
+    status TEXT DEFAULT 'Received',
+    customerName TEXT DEFAULT '',
+    brand TEXT DEFAULT '',
+    model TEXT DEFAULT '',
+    estimatedCompletion DATETIME,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
 
   // Add photos table if it doesn't exist
   db.run(`CREATE TABLE IF NOT EXISTS photo (

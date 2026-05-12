@@ -1,0 +1,18 @@
+services:
+  watchapp:
+    build: .
+    container_name: fricking-watch-repair
+    ports:
+      - "8080:3001"
+    volumes:
+      - ./data:/app/data
+      - ./data/uploads:/app/uploads
+      - ./data/manuals:/app/manuals
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATA_DIR=/app/data
+      - UPLOADS_DIR=/app/uploads
+      - MANUALS_DIR=/app/manuals
+      - MOVEMENT_PHOTOS_DIR=/app/data/movement-photos
+    restart: unless-stopped

@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Logs
+*.log
+vite.err.log
+vite.out.log
+
+# Environment
+.env
+.env.*
+
+# Runtime data & secrets
+.jwt_secret
+public/.jwt_secret
+*.db3
+data/
+
+# User-uploaded content
+uploads/
+manuals/
+movement-photos/
+public/movement-photos/
+public/parts-ref/
+
+# Editor / tooling
+.claude/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

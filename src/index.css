@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme {
+  --font-serif: 'Playfair Display', serif;
+  --font-sans: 'Inter', sans-serif;
+  --color-gold-50: #fdf8ef;
+  --color-gold-100: #f9edcf;
+  --color-gold-200: #f2d99e;
+  --color-gold-300: #e9c06c;
+  --color-gold-400: #e2a94a;
+  --color-gold-500: #d4912e;
+  --color-gold-600: #bc7424;
+  --color-gold-700: #9c5720;
+  --color-gold-800: #804621;
+  --color-gold-900: #6a3b1f;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Playfair Display', serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #1c1917;
+}
+::-webkit-scrollbar-thumb {
+  background: #57534e;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #78716c;
+}
+
+/* Smooth transitions */
+.page-transition {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Select dropdown options */
+select option {
+  background-color: #292524;
+  color: #e7e5e4;
+}
+
+/* Glass effect */
+.glass {
+  background: rgba(28, 25, 23, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(214, 167, 96, 0.15);
+}

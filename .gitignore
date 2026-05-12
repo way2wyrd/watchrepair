@@ -17,7 +17,7 @@ vite.out.log
 .jwt_secret
 public/.jwt_secret
 *.db3
-data/
+/data/
 
 # User-uploaded content
 uploads/

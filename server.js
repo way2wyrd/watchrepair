@@ -349,6 +349,7 @@ async function initDB() {
     password_hash TEXT NOT NULL,
     email TEXT,
     is_admin INTEGER DEFAULT 0,
+    last_mfa_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
   try { db.run('ALTER TABLE users ADD COLUMN email TEXT'); } catch(e) {}
@@ -390,18 +391,9 @@ async function initDB() {
     db.run('INSERT INTO smtp_settings (id) VALUES (1)');
   }
 
-  // Seed default admin if no users exist
   const userCount = db.exec('SELECT COUNT(*) FROM users');
   if (userCount[0]?.values[0][0] === 0) {
-    const DEFAULT_PASSWORD = 'WatchApp1!';
-    const hash = bcrypt.hashSync(DEFAULT_PASSWORD, 12);
-    db.run('INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)', ['admin', hash]);
-    console.log('\n╔══════════════════════════════════════════╗');
-    console.log('║  Default admin account created           ║');
-    console.log('║  Username: admin                         ║');
-    console.log(`║  Password: ${DEFAULT_PASSWORD}                   ║`);
-    console.log('║  Set up MFA on first login               ║');
-    console.log('╚══════════════════════════════════════════╝\n');
+    console.log('\n[setup] No users found — waiting for first-run setup via the web UI.\n');
   } else {
     // Ensure the original 'admin' user has is_admin set (post-migration backfill)
     db.run("UPDATE users SET is_admin = 1 WHERE username = 'admin' AND (is_admin IS NULL OR is_admin = 0)");
@@ -616,16 +608,35 @@ app.post('/api/auth/mfa/verify', (req, res) => {
 });
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
-  const row = dbQueryOne('SELECT email, is_admin FROM users WHERE id = ?', [req.user.userId]);
+  const row = dbQueryOne('SELECT email, is_admin, created_at FROM users WHERE id = ?', [req.user.userId]);
   res.json({
     userId: req.user.userId,
     username: req.user.username,
     email: row?.email || null,
     is_admin: !!row?.is_admin,
+    created_at: row?.created_at || null,
   });
 });
 
 app.post('/api/auth/logout', (req, res) => {
+  res.json({ success: true });
+});
+
+app.post('/api/auth/change-password', requireAuth, async (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Current and new password required' });
+  if (newPassword.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters' });
+
+  const user = dbQueryOne('SELECT password_hash FROM users WHERE id = ?', [req.user.userId]);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const valid = await bcrypt.compare(currentPassword, user.password_hash);
+  if (!valid) return res.status(401).json({ error: 'Current password is incorrect' });
+
+  const hash = await bcrypt.hash(newPassword, 12);
+  db.run('UPDATE users SET password_hash = ? WHERE id = ?', [hash, req.user.userId]);
+  saveDB();
+
   res.json({ success: true });
 });
 
@@ -664,6 +675,29 @@ app.post('/api/auth/password-setup/:token', async (req, res) => {
   db.run("UPDATE password_setup_token SET used_at = datetime('now') WHERE id = ?", [row.id]);
   // Invalidate any other pending tokens for this user
   db.run("UPDATE password_setup_token SET used_at = datetime('now') WHERE user_id = ? AND used_at IS NULL", [row.user_id]);
+  saveDB();
+
+  res.json({ success: true });
+});
+
+// ─── First-run setup (no auth required, only works when no users exist) ───
+app.get('/api/setup/needed', (req, res) => {
+  const result = db.exec('SELECT COUNT(*) FROM users');
+  const count = result[0]?.values[0][0] ?? 0;
+  res.json({ needed: count === 0 });
+});
+
+app.post('/api/setup', async (req, res) => {
+  const result = db.exec('SELECT COUNT(*) FROM users');
+  const count = result[0]?.values[0][0] ?? 0;
+  if (count > 0) return res.status(403).json({ error: 'Setup already complete' });
+
+  const { username, password } = req.body || {};
+  if (!username || username.trim().length < 2) return res.status(400).json({ error: 'Username must be at least 2 characters' });
+  if (!password || password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+
+  const hash = await bcrypt.hash(password.trim ? password : password, 12);
+  db.run('INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)', [username.trim(), hash]);
   saveDB();
 
   res.json({ success: true });

@@ -12,6 +12,10 @@ A self-hosted web application for managing a watch repair workshop: track repair
 - **Parts Inventory** – track parts on hand, organized by type, with form-based add/edit.
 - **Search** – full-text search across repairs, movements, manuals, and parts.
 - **Authentication** – username/password login with JWT sessions and optional TOTP (2FA) using authenticator apps.
+- **User Management** – admin-only panel to create users, resend invite links, and delete accounts. New users receive an email invite to set their own password.
+- **Profile & Password** – any logged-in user can view their account details and change their password from the profile page.
+- **First-Run Setup** – on a fresh install the app presents a setup screen to create the initial administrator account (username + password of your choice) before the login screen appears.
+- **SMTP Settings** – admin-configurable outgoing email (host, port, TLS, credentials) with a test-send button; falls back to environment variables when not configured via the UI.
 
 ## Tech Stack
 
@@ -79,6 +83,17 @@ The server reads the following environment variables:
 | `MANUALS_DIR` | `./manuals` | Service manual files |
 | `MOVEMENT_PHOTOS_DIR` | `$DATA_DIR/movement-photos` | Movement reference photos |
 | `JWT_SECRET` | auto-generated | JWT signing secret; if unset, a random secret is generated and persisted under `DATA_DIR/.jwt_secret` |
+| `SMTP_HOST` | — | Outgoing mail server hostname (overridden by admin UI settings when configured) |
+| `SMTP_PORT` | `587` | SMTP port |
+| `SMTP_SECURE` | `false` | Set to `true` to use TLS |
+| `SMTP_USER` | — | SMTP auth username |
+| `SMTP_PASS` | — | SMTP auth password |
+| `SMTP_FROM` | — | Sender address for invite emails |
+| `PUBLIC_URL` | auto-detected | Base URL used in invite links (e.g. `https://repairs.example.com`) |
+
+### First run
+
+On a fresh install (no database yet), the app shows a **First-Time Setup** screen where you create the initial administrator account. Fill in a username and password, click **Create Admin Account**, and you'll land on the login screen.
 
 ## Project Structure
 
@@ -90,7 +105,7 @@ The server reads the following environment variables:
 │   ├── api.js             # API client
 │   ├── context/           # Auth context
 │   ├── components/        # Shared UI components
-│   ├── pages/             # Dashboard, Repairs, Gallery, Manuals, Movements, Parts, Search, Login
+│   ├── pages/             # Dashboard, Repairs, Gallery, Manuals, Movements, Parts, Search, Login, Profile, Users, AdminSmtp, FirstRunSetup
 │   └── data/              # Lookup tables
 ├── public/                # Static assets + SQLite database in production
 ├── uploads/               # Repair photo uploads

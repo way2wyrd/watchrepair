@@ -113,4 +113,29 @@ export const api = {
     }),
   updateManual: (id, data) => request(`/manuals/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteManual: (id) => request(`/manuals/${id}`, { method: 'DELETE' }),
+
+  // Users (admin)
+  getUsers: () => request('/users'),
+  createUser: (data) => request('/users', { method: 'POST', body: JSON.stringify(data) }),
+  resendInvite: (id) => request(`/users/${id}/resend-invite`, { method: 'POST' }),
+  deleteUser: (id) => request(`/users/${id}`, { method: 'DELETE' }),
 };
+
+// Password setup endpoints don't require auth — separate raw fetch helpers.
+export async function getPasswordSetupInfo(token) {
+  const res = await fetch(`${BASE}/auth/password-setup/${encodeURIComponent(token)}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Invalid link');
+  return data;
+}
+
+export async function submitPasswordSetup(token, password) {
+  const res = await fetch(`${BASE}/auth/password-setup/${encodeURIComponent(token)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to set password');
+  return data;
+}

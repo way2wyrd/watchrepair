@@ -23,7 +23,12 @@ export function AuthProvider({ children }) {
 
   const login = (token, userData) => {
     localStorage.setItem('watchapp_token', token);
+    // userData from login doesn't include is_admin — refetch /me so the UI knows.
     setUser(userData);
+    fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => { if (data) setUser(data); })
+      .catch(() => {});
   };
 
   const logout = () => {

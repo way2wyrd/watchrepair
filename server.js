@@ -372,6 +372,24 @@ async function initDB() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
+  // ─── SMTP Settings (single-row config) ───
+  db.run(`CREATE TABLE IF NOT EXISTS smtp_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    host TEXT,
+    port INTEGER,
+    secure INTEGER DEFAULT 0,
+    username TEXT,
+    password TEXT,
+    from_email TEXT,
+    from_name TEXT,
+    enabled INTEGER DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  const existingSmtp = db.exec('SELECT COUNT(*) FROM smtp_settings');
+  if (existingSmtp[0]?.values[0][0] === 0) {
+    db.run('INSERT INTO smtp_settings (id) VALUES (1)');
+  }
+
   // Seed default admin if no users exist
   const userCount = db.exec('SELECT COUNT(*) FROM users');
   if (userCount[0]?.values[0][0] === 0) {
@@ -432,14 +450,46 @@ function requireAdmin(req, res, next) {
 }
 
 // ─── Email ───
-let mailTransport = null;
-if (nodemailer && process.env.SMTP_HOST) {
-  mailTransport = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
-  });
+// SMTP config can come from the DB (admin UI) or from env vars (legacy/deploy override).
+// DB takes precedence when `enabled` is set; otherwise we fall back to env, otherwise log only.
+function getSmtpSettings() {
+  const row = dbQueryOne('SELECT host, port, secure, username, password, from_email, from_name, enabled, updated_at FROM smtp_settings WHERE id = 1');
+  return row || {};
+}
+
+function activeMailConfig() {
+  const s = getSmtpSettings();
+  if (s.enabled && s.host && s.port) {
+    return {
+      source: 'db',
+      host: s.host,
+      port: Number(s.port),
+      secure: !!s.secure,
+      user: s.username || null,
+      pass: s.password || null,
+      from: s.from_name ? `"${s.from_name}" <${s.from_email}>` : (s.from_email || null),
+    };
+  }
+  if (process.env.SMTP_HOST) {
+    return {
+      source: 'env',
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: process.env.SMTP_SECURE === 'true',
+      user: process.env.SMTP_USER || null,
+      pass: process.env.SMTP_PASS || null,
+      from: process.env.SMTP_FROM || null,
+    };
+  }
+  return null;
+}
+
+function buildTransporter(cfg) {
+  if (!nodemailer) throw new Error('nodemailer is not installed');
+  if (!cfg?.host || !cfg?.port) throw new Error('SMTP host and port are required');
+  const opts = { host: cfg.host, port: Number(cfg.port), secure: !!cfg.secure };
+  if (cfg.user || cfg.pass) opts.auth = { user: cfg.user || '', pass: cfg.pass || '' };
+  return nodemailer.createTransport(opts);
 }
 
 async function sendPasswordSetupEmail({ to, username, link }) {
@@ -450,14 +500,16 @@ async function sendPasswordSetupEmail({ to, username, link }) {
 <p><a href="${link}">Click here to set your password</a> (valid for 72 hours).</p>
 <p style="color:#888;font-size:12px">Or copy this URL into your browser:<br/>${link}</p>`;
 
-  if (!mailTransport) {
+  const cfg = activeMailConfig();
+  if (!cfg) {
     console.log('\n[email] SMTP not configured — would have sent password setup email:');
     console.log(`  To: ${to}`);
     console.log(`  Link: ${link}\n`);
     return { sent: false, link };
   }
-  await mailTransport.sendMail({
-    from: process.env.SMTP_FROM || 'no-reply@frickingwatchrepair.local',
+  const transporter = buildTransporter(cfg);
+  await transporter.sendMail({
+    from: cfg.from || 'no-reply@frickingwatchrepair.local',
     to, subject, text, html,
   });
   return { sent: true };
@@ -723,6 +775,80 @@ app.delete('/api/users/:id', requireAdmin, (req, res) => {
   db.run('DELETE FROM users WHERE id = ?', [id]);
   saveDB();
   res.json({ success: true });
+});
+
+// ─── SMTP Settings (admin only) ───
+app.get('/api/smtp', requireAdmin, (req, res) => {
+  const s = getSmtpSettings();
+  const envConfigured = !!process.env.SMTP_HOST;
+  res.json({
+    host: s.host || '',
+    port: s.port || '',
+    secure: !!s.secure,
+    username: s.username || '',
+    passwordSet: !!s.password,
+    from_email: s.from_email || '',
+    from_name: s.from_name || '',
+    enabled: !!s.enabled,
+    updated_at: s.updated_at || null,
+    env_fallback: envConfigured,
+  });
+});
+
+app.put('/api/smtp', requireAdmin, (req, res) => {
+  const { host, port, secure, username, password, from_email, from_name, enabled } = req.body || {};
+  const current = getSmtpSettings();
+  const nextPassword = (password === undefined || password === null || password === '')
+    ? current.password
+    : password;
+  db.run(
+    `UPDATE smtp_settings SET host=?, port=?, secure=?, username=?, password=?, from_email=?, from_name=?, enabled=?, updated_at=datetime('now') WHERE id = 1`,
+    [
+      host || null,
+      port ? Number(port) : null,
+      secure ? 1 : 0,
+      username || null,
+      nextPassword || null,
+      from_email || null,
+      from_name || null,
+      enabled ? 1 : 0,
+    ]
+  );
+  saveDB();
+  res.json({ success: true });
+});
+
+app.post('/api/smtp/test', requireAdmin, async (req, res) => {
+  const { to } = req.body || {};
+  if (!to) return res.status(400).json({ error: 'Recipient address (to) is required' });
+
+  const saved = getSmtpSettings();
+  const override = req.body && req.body.settings ? req.body.settings : {};
+  const cfg = {
+    host: override.host ?? saved.host,
+    port: override.port ?? saved.port,
+    secure: override.secure ?? saved.secure,
+    user: override.username ?? saved.username,
+    pass: (override.password === undefined || override.password === '') ? saved.password : override.password,
+    from: (override.from_name ?? saved.from_name)
+      ? `"${override.from_name ?? saved.from_name}" <${override.from_email ?? saved.from_email}>`
+      : (override.from_email ?? saved.from_email),
+  };
+  if (!cfg.host || !cfg.port) return res.status(400).json({ error: 'SMTP host and port must be configured' });
+  if (!cfg.from) return res.status(400).json({ error: 'A "from" email address must be configured' });
+
+  try {
+    const transporter = buildTransporter(cfg);
+    await transporter.sendMail({
+      from: cfg.from,
+      to,
+      subject: 'WatchApp SMTP test',
+      text: 'This is a test message from WatchApp. If you received this, your SMTP settings are working.',
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Failed to send test email' });
+  }
 });
 
 // ─── Positions ───

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, NavLink, useLocation, useNavigate, useMatch } from 'react-router-dom';
-import { Search, PlusCircle, LayoutDashboard, Wrench, Image, BookOpen, Cog, Menu, X, ChevronDown, ChevronRight, Package, LogOut, Users as UsersIcon } from 'lucide-react';
+import { Search, PlusCircle, LayoutDashboard, Wrench, Image, BookOpen, Cog, Menu, X, ChevronDown, ChevronRight, Package, LogOut, Users as UsersIcon, Mail } from 'lucide-react';
 import { api } from './api';
 import { useAuth } from './context/AuthContext';
 import LoginPage from './pages/LoginPage';
@@ -17,6 +17,7 @@ import Parts from './pages/Parts';
 import PartForm from './pages/PartForm';
 import Users from './pages/Users';
 import SetPasswordPage from './pages/SetPasswordPage';
+import AdminSmtp from './pages/AdminSmtp';
 
 const navLinks = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -31,6 +32,7 @@ const navLinks = [
 
 const adminNavLinks = [
   { to: '/users', icon: UsersIcon, label: 'Users' },
+  { to: '/admin/smtp', icon: Mail, label: 'SMTP' },
 ];
 
 const sortByLabel = ([a], [b]) => a.localeCompare(b, undefined, { sensitivity: 'base' });
@@ -385,6 +387,7 @@ function AppLayout({ user, logout }) {
             <Route path="/parts/:id/edit" element={<PartForm />} />
             <Route path="/search" element={<SearchPage />} />
             <Route path="/users" element={<Users />} />
+            <Route path="/admin/smtp" element={<AdminSmtp />} />
           </Routes>
         </div>
       </main>

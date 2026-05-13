@@ -119,6 +119,11 @@ export const api = {
   createUser: (data) => request('/users', { method: 'POST', body: JSON.stringify(data) }),
   resendInvite: (id) => request(`/users/${id}/resend-invite`, { method: 'POST' }),
   deleteUser: (id) => request(`/users/${id}`, { method: 'DELETE' }),
+
+  // SMTP Settings (admin)
+  getSmtpSettings: () => request('/smtp'),
+  updateSmtpSettings: (data) => request('/smtp', { method: 'PUT', body: JSON.stringify(data) }),
+  sendSmtpTest: (data) => request('/smtp/test', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // Password setup endpoints don't require auth — separate raw fetch helpers.

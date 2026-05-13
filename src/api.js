@@ -120,11 +120,32 @@ export const api = {
   resendInvite: (id) => request(`/users/${id}/resend-invite`, { method: 'POST' }),
   deleteUser: (id) => request(`/users/${id}`, { method: 'DELETE' }),
 
+  // Profile
+  changePassword: (data) => request('/auth/change-password', { method: 'POST', body: JSON.stringify(data) }),
+
   // SMTP Settings (admin)
   getSmtpSettings: () => request('/smtp'),
   updateSmtpSettings: (data) => request('/smtp', { method: 'PUT', body: JSON.stringify(data) }),
   sendSmtpTest: (data) => request('/smtp/test', { method: 'POST', body: JSON.stringify(data) }),
 };
+
+// First-run setup (no auth required)
+export async function checkSetupNeeded() {
+  const res = await fetch(`${BASE}/setup/needed`);
+  const data = await res.json();
+  return data.needed === true;
+}
+
+export async function submitFirstRunSetup(username, password) {
+  const res = await fetch(`${BASE}/setup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Setup failed');
+  return data;
+}
 
 // Password setup endpoints don't require auth — separate raw fetch helpers.
 export async function getPasswordSetupInfo(token) {

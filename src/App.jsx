@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, NavLink, useLocation, useNavigate, useMatch } from 'react-router-dom';
-import { Search, PlusCircle, LayoutDashboard, Wrench, Image, BookOpen, Cog, Menu, X, ChevronDown, ChevronRight, Package, LogOut, Users as UsersIcon, Mail } from 'lucide-react';
-import { api } from './api';
+import { Search, PlusCircle, LayoutDashboard, Wrench, Image, BookOpen, Cog, Menu, X, ChevronDown, ChevronRight, Package, LogOut, Users as UsersIcon, Mail, UserCircle } from 'lucide-react';
+import { api, checkSetupNeeded } from './api';
 import { useAuth } from './context/AuthContext';
 import LoginPage from './pages/LoginPage';
+import FirstRunSetup from './pages/FirstRunSetup';
 import Dashboard from './pages/Dashboard';
 import RepairList from './pages/RepairList';
 import RepairDetail from './pages/RepairDetail';
@@ -18,6 +19,7 @@ import PartForm from './pages/PartForm';
 import Users from './pages/Users';
 import SetPasswordPage from './pages/SetPasswordPage';
 import AdminSmtp from './pages/AdminSmtp';
+import Profile from './pages/Profile';
 
 const navLinks = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -43,6 +45,11 @@ const MANUALS_NAV_UPDATED_EVENT = 'manuals-nav-updated';
 export default function App() {
   const { user, loading: authLoading, logout } = useAuth();
   const setPasswordMatch = useMatch('/set-password/:token');
+  const [setupNeeded, setSetupNeeded] = useState(null); // null = unknown
+
+  useEffect(() => {
+    checkSetupNeeded().then(setSetupNeeded).catch(() => setSetupNeeded(false));
+  }, []);
 
   // Redirect to login on any 401 fired from api.js
   useEffect(() => {
@@ -54,13 +61,15 @@ export default function App() {
   // Password setup route bypasses auth entirely — new users arrive here from invite emails.
   if (setPasswordMatch) return <SetPasswordPage token={setPasswordMatch.params.token} />;
 
-  if (authLoading) {
+  if (setupNeeded === null || authLoading) {
     return (
       <div className="min-h-screen bg-stone-950 flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-gold-500/30 border-t-gold-400 rounded-full animate-spin" />
       </div>
     );
   }
+
+  if (setupNeeded) return <FirstRunSetup onComplete={() => setSetupNeeded(false)} />;
 
   if (!user) return <LoginPage />;
 
@@ -355,10 +364,20 @@ function AppLayout({ user, logout }) {
           )}
         </nav>
 
-        <div className="p-4 border-t border-stone-800 space-y-3">
-          <p className="text-xs text-stone-600 text-center">
-            Signed in as <span className="text-stone-500">{user?.username}</span>
-          </p>
+        <div className="p-4 border-t border-stone-800 space-y-2">
+          <NavLink
+            to="/profile"
+            className={({ isActive }) =>
+              `w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors ${
+                isActive
+                  ? 'bg-gold-500/15 text-gold-400 border border-gold-500/20'
+                  : 'text-stone-500 hover:text-stone-300 hover:bg-stone-800/50'
+              }`
+            }
+          >
+            <UserCircle className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{user?.username}</span>
+          </NavLink>
           <button
             onClick={logout}
             className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs text-stone-500 hover:text-red-400 hover:bg-red-400/10 transition-colors"
@@ -388,6 +407,7 @@ function AppLayout({ user, logout }) {
             <Route path="/search" element={<SearchPage />} />
             <Route path="/users" element={<Users />} />
             <Route path="/admin/smtp" element={<AdminSmtp />} />
+            <Route path="/profile" element={<Profile />} />
           </Routes>
         </div>
       </main>

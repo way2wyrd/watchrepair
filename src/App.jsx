@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { Search, PlusCircle, LayoutDashboard, Wrench, Image, BookOpen, Cog, Menu, X, ChevronDown, ChevronRight, Package, LogOut } from 'lucide-react';
+import { Routes, Route, NavLink, useLocation, useNavigate, useMatch } from 'react-router-dom';
+import { Search, PlusCircle, LayoutDashboard, Wrench, Image, BookOpen, Cog, Menu, X, ChevronDown, ChevronRight, Package, LogOut, Users as UsersIcon, Mail } from 'lucide-react';
 import { api } from './api';
 import { useAuth } from './context/AuthContext';
 import LoginPage from './pages/LoginPage';
@@ -15,6 +15,9 @@ import Movements from './pages/Movements';
 import MovementDetail from './pages/MovementDetail';
 import Parts from './pages/Parts';
 import PartForm from './pages/PartForm';
+import Users from './pages/Users';
+import SetPasswordPage from './pages/SetPasswordPage';
+import AdminSmtp from './pages/AdminSmtp';
 
 const navLinks = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -27,6 +30,11 @@ const navLinks = [
   { to: '/search', icon: Search, label: 'Search' },
 ];
 
+const adminNavLinks = [
+  { to: '/users', icon: UsersIcon, label: 'Users' },
+  { to: '/admin/smtp', icon: Mail, label: 'SMTP' },
+];
+
 const sortByLabel = ([a], [b]) => a.localeCompare(b, undefined, { sensitivity: 'base' });
 const sortByName = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
 const MANUALS_NAV_UPDATED_EVENT = 'manuals-nav-updated';
@@ -34,6 +42,7 @@ const MANUALS_NAV_UPDATED_EVENT = 'manuals-nav-updated';
 // ── Auth guard wrapper ──────────────────────────────────────────────────────
 export default function App() {
   const { user, loading: authLoading, logout } = useAuth();
+  const setPasswordMatch = useMatch('/set-password/:token');
 
   // Redirect to login on any 401 fired from api.js
   useEffect(() => {
@@ -41,6 +50,9 @@ export default function App() {
     window.addEventListener('watchapp:unauthorized', handler);
     return () => window.removeEventListener('watchapp:unauthorized', handler);
   }, [logout]);
+
+  // Password setup route bypasses auth entirely — new users arrive here from invite emails.
+  if (setPasswordMatch) return <SetPasswordPage token={setPasswordMatch.params.token} />;
 
   if (authLoading) {
     return (
@@ -265,6 +277,7 @@ function AppLayout({ user, logout }) {
                 </div>
               )}
 
+              {/* admin links rendered separately below */}
               {to === '/manuals' && onManuals && showManualCats && manualCategories.length > 0 && (
                 <div className="ml-3 mt-0.5 mb-1 border-l border-stone-700/50 pl-3 space-y-0.5">
                   <button
@@ -316,6 +329,30 @@ function AppLayout({ user, logout }) {
               )}
             </div>
           ))}
+
+          {user?.is_admin && (
+            <>
+              <div className="pt-4 mt-2 border-t border-stone-800">
+                <p className="px-4 pb-2 text-[10px] uppercase tracking-widest text-stone-600 font-medium">Admin</p>
+                {adminNavLinks.map(({ to, icon: Icon, label }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                        isActive
+                          ? 'bg-gold-500/15 text-gold-400 border border-gold-500/20'
+                          : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/50'
+                      }`
+                    }
+                  >
+                    <Icon className="w-4 h-4" />
+                    {label}
+                  </NavLink>
+                ))}
+              </div>
+            </>
+          )}
         </nav>
 
         <div className="p-4 border-t border-stone-800 space-y-3">
@@ -349,6 +386,8 @@ function AppLayout({ user, logout }) {
             <Route path="/parts/new" element={<PartForm />} />
             <Route path="/parts/:id/edit" element={<PartForm />} />
             <Route path="/search" element={<SearchPage />} />
+            <Route path="/users" element={<Users />} />
+            <Route path="/admin/smtp" element={<AdminSmtp />} />
           </Routes>
         </div>
       </main>

@@ -10,6 +10,10 @@ const jwt = require('jsonwebtoken');
 const { generateSecret: totpGenerateSecret, generateSync: totpGenerate, verifySync: totpVerify, generateURI: totpURI } = require('otplib');
 const QRCode = require('qrcode');
 
+// nodemailer is optional — if SMTP isn't configured we log the link instead.
+let nodemailer;
+try { nodemailer = require('nodemailer'); } catch { nodemailer = null; }
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'public');
@@ -121,6 +125,8 @@ async function initDB() {
     console.log(`No database found, creating new one at ${DB_PATH}`);
     db = new SQL.Database();
   }
+  // sql.js disables FK enforcement by default — turn it on so ON DELETE CASCADE works.
+  db.run('PRAGMA foreign_keys = ON');
 
   // ─── Base tables (created on first run) ───
   db.run(`CREATE TABLE IF NOT EXISTS movementType (
@@ -341,8 +347,12 @@ async function initDB() {
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
+    email TEXT,
+    is_admin INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+  try { db.run('ALTER TABLE users ADD COLUMN email TEXT'); } catch(e) {}
+  try { db.run('ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0'); } catch(e) {}
 
   db.run(`CREATE TABLE IF NOT EXISTS mfa_secrets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -352,19 +362,54 @@ async function initDB() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
+  // Password setup / reset tokens for invited users
+  db.run(`CREATE TABLE IF NOT EXISTS password_setup_token (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  // ─── SMTP Settings (single-row config) ───
+  db.run(`CREATE TABLE IF NOT EXISTS smtp_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    host TEXT,
+    port INTEGER,
+    secure INTEGER DEFAULT 0,
+    username TEXT,
+    password TEXT,
+    from_email TEXT,
+    from_name TEXT,
+    enabled INTEGER DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  const existingSmtp = db.exec('SELECT COUNT(*) FROM smtp_settings');
+  if (existingSmtp[0]?.values[0][0] === 0) {
+    db.run('INSERT INTO smtp_settings (id) VALUES (1)');
+  }
+
   // Seed default admin if no users exist
   const userCount = db.exec('SELECT COUNT(*) FROM users');
   if (userCount[0]?.values[0][0] === 0) {
     const DEFAULT_PASSWORD = 'WatchApp1!';
     const hash = bcrypt.hashSync(DEFAULT_PASSWORD, 12);
-    db.run('INSERT INTO users (username, password_hash) VALUES (?, ?)', ['admin', hash]);
+    db.run('INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)', ['admin', hash]);
     console.log('\n╔══════════════════════════════════════════╗');
     console.log('║  Default admin account created           ║');
     console.log('║  Username: admin                         ║');
     console.log(`║  Password: ${DEFAULT_PASSWORD}                   ║`);
     console.log('║  Set up MFA on first login               ║');
     console.log('╚══════════════════════════════════════════╝\n');
+  } else {
+    // Ensure the original 'admin' user has is_admin set (post-migration backfill)
+    db.run("UPDATE users SET is_admin = 1 WHERE username = 'admin' AND (is_admin IS NULL OR is_admin = 0)");
   }
+
+  // Clean up orphan tokens / mfa_secrets from before FK enforcement was enabled
+  db.run('DELETE FROM password_setup_token WHERE user_id NOT IN (SELECT id FROM users)');
+  db.run('DELETE FROM mfa_secrets WHERE user_id NOT IN (SELECT id FROM users)');
 
   saveDB();
   console.log('Database initialized');
@@ -396,6 +441,78 @@ function requireAuth(req, res, next) {
   } catch {
     res.status(401).json({ error: 'Unauthorized' });
   }
+}
+
+function requireAdmin(req, res, next) {
+  const row = dbQueryOne('SELECT is_admin FROM users WHERE id = ?', [req.user.userId]);
+  if (!row || !row.is_admin) return res.status(403).json({ error: 'Admin access required' });
+  next();
+}
+
+// ─── Email ───
+// SMTP config can come from the DB (admin UI) or from env vars (legacy/deploy override).
+// DB takes precedence when `enabled` is set; otherwise we fall back to env, otherwise log only.
+function getSmtpSettings() {
+  const row = dbQueryOne('SELECT host, port, secure, username, password, from_email, from_name, enabled, updated_at FROM smtp_settings WHERE id = 1');
+  return row || {};
+}
+
+function activeMailConfig() {
+  const s = getSmtpSettings();
+  if (s.enabled && s.host && s.port) {
+    return {
+      source: 'db',
+      host: s.host,
+      port: Number(s.port),
+      secure: !!s.secure,
+      user: s.username || null,
+      pass: s.password || null,
+      from: s.from_name ? `"${s.from_name}" <${s.from_email}>` : (s.from_email || null),
+    };
+  }
+  if (process.env.SMTP_HOST) {
+    return {
+      source: 'env',
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: process.env.SMTP_SECURE === 'true',
+      user: process.env.SMTP_USER || null,
+      pass: process.env.SMTP_PASS || null,
+      from: process.env.SMTP_FROM || null,
+    };
+  }
+  return null;
+}
+
+function buildTransporter(cfg) {
+  if (!nodemailer) throw new Error('nodemailer is not installed');
+  if (!cfg?.host || !cfg?.port) throw new Error('SMTP host and port are required');
+  const opts = { host: cfg.host, port: Number(cfg.port), secure: !!cfg.secure };
+  if (cfg.user || cfg.pass) opts.auth = { user: cfg.user || '', pass: cfg.pass || '' };
+  return nodemailer.createTransport(opts);
+}
+
+async function sendPasswordSetupEmail({ to, username, link }) {
+  const subject = 'Set up your Fricking Watch Repair account';
+  const text = `Hello ${username},\n\nAn account has been created for you on Fricking Watch Repair.\n\nClick the link below to set your password (valid for 72 hours):\n${link}\n\nIf you weren't expecting this, please ignore this email.`;
+  const html = `<p>Hello <strong>${username}</strong>,</p>
+<p>An account has been created for you on <strong>Fricking Watch Repair</strong>.</p>
+<p><a href="${link}">Click here to set your password</a> (valid for 72 hours).</p>
+<p style="color:#888;font-size:12px">Or copy this URL into your browser:<br/>${link}</p>`;
+
+  const cfg = activeMailConfig();
+  if (!cfg) {
+    console.log('\n[email] SMTP not configured — would have sent password setup email:');
+    console.log(`  To: ${to}`);
+    console.log(`  Link: ${link}\n`);
+    return { sent: false, link };
+  }
+  const transporter = buildTransporter(cfg);
+  await transporter.sendMail({
+    from: cfg.from || 'no-reply@frickingwatchrepair.local',
+    to, subject, text, html,
+  });
+  return { sent: true };
 }
 
 function verifyTempToken(req) {
@@ -499,15 +616,240 @@ app.post('/api/auth/mfa/verify', (req, res) => {
 });
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
-  res.json({ userId: req.user.userId, username: req.user.username });
+  const row = dbQueryOne('SELECT email, is_admin FROM users WHERE id = ?', [req.user.userId]);
+  res.json({
+    userId: req.user.userId,
+    username: req.user.username,
+    email: row?.email || null,
+    is_admin: !!row?.is_admin,
+  });
 });
 
 app.post('/api/auth/logout', (req, res) => {
   res.json({ success: true });
 });
 
+// ─── Password setup (no auth required) ───
+// Look up a setup token to show the user the username it belongs to.
+app.get('/api/auth/password-setup/:token', (req, res) => {
+  const tokenHash = crypto.createHash('sha256').update(req.params.token).digest('hex');
+  const row = dbQueryOne(
+    `SELECT t.id, t.user_id, t.expires_at, t.used_at, u.username, u.email
+     FROM password_setup_token t JOIN users u ON u.id = t.user_id
+     WHERE t.token_hash = ?`,
+    [tokenHash]
+  );
+  if (!row) return res.status(404).json({ error: 'Invalid or expired link' });
+  if (row.used_at) return res.status(410).json({ error: 'This link has already been used' });
+  if (new Date(row.expires_at) < new Date()) return res.status(410).json({ error: 'This link has expired' });
+  res.json({ username: row.username, email: row.email });
+});
+
+// Consume a token + set the password.
+app.post('/api/auth/password-setup/:token', async (req, res) => {
+  const { password } = req.body || {};
+  if (!password || password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+
+  const tokenHash = crypto.createHash('sha256').update(req.params.token).digest('hex');
+  const row = dbQueryOne(
+    `SELECT id, user_id, expires_at, used_at FROM password_setup_token WHERE token_hash = ?`,
+    [tokenHash]
+  );
+  if (!row) return res.status(404).json({ error: 'Invalid or expired link' });
+  if (row.used_at) return res.status(410).json({ error: 'This link has already been used' });
+  if (new Date(row.expires_at) < new Date()) return res.status(410).json({ error: 'This link has expired' });
+
+  const hash = await bcrypt.hash(password, 12);
+  db.run('UPDATE users SET password_hash = ? WHERE id = ?', [hash, row.user_id]);
+  db.run("UPDATE password_setup_token SET used_at = datetime('now') WHERE id = ?", [row.id]);
+  // Invalidate any other pending tokens for this user
+  db.run("UPDATE password_setup_token SET used_at = datetime('now') WHERE user_id = ? AND used_at IS NULL", [row.user_id]);
+  saveDB();
+
+  res.json({ success: true });
+});
+
 // All routes below this line require a valid 60-day session token
 app.use('/api', requireAuth);
+
+// ─── User Management (admin only) ───
+function publicOrigin(req) {
+  // In dev, the frontend runs on a separate port (Vite) and proxies /api here.
+  // The browser's Origin header points at the frontend — that's what setup links must use.
+  return process.env.PUBLIC_URL
+    || req.get('origin')
+    || `${req.protocol}://${req.get('host')}`;
+}
+
+app.get('/api/users', requireAdmin, (req, res) => {
+  const results = db.exec(`
+    SELECT u.id, u.username, u.email, u.is_admin, u.created_at, u.password_hash,
+           (SELECT MIN(expires_at) FROM password_setup_token t
+            WHERE t.user_id = u.id AND t.used_at IS NULL AND t.expires_at > datetime('now')) as pending_invite_expires
+    FROM users u ORDER BY u.username
+  `);
+  if (!results.length) return res.json([]);
+  res.json(results[0].values.map(r => ({
+    id: r[0], username: r[1], email: r[2], is_admin: !!r[3], created_at: r[4],
+    password_set: !!r[5] && r[5] !== 'INVITED',
+    pending_invite: !!r[6],
+  })));
+});
+
+app.post('/api/users', requireAdmin, async (req, res) => {
+  const { username, email, is_admin } = req.body || {};
+  if (!username || !username.trim()) return res.status(400).json({ error: 'Username is required' });
+  if (!email || !email.trim()) return res.status(400).json({ error: 'Email is required' });
+
+  const existing = dbQueryOne('SELECT id FROM users WHERE username = ?', [username.trim()]);
+  if (existing) return res.status(409).json({ error: 'Username already exists' });
+
+  // Placeholder hash — user can't log in until they set a real password via the setup link.
+  const placeholder = 'INVITED';
+  db.run(
+    'INSERT INTO users (username, password_hash, email, is_admin) VALUES (?, ?, ?, ?)',
+    [username.trim(), placeholder, email.trim(), is_admin ? 1 : 0]
+  );
+  const insertedId = db.exec('SELECT last_insert_rowid()')[0].values[0][0];
+
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+  db.run(
+    'INSERT INTO password_setup_token (user_id, token_hash, expires_at) VALUES (?, ?, ?)',
+    [insertedId, tokenHash, expiresAt]
+  );
+  saveDB();
+
+  const link = `${publicOrigin(req)}/set-password/${rawToken}`;
+
+  let emailResult = { sent: false };
+  try {
+    emailResult = await sendPasswordSetupEmail({ to: email.trim(), username: username.trim(), link });
+  } catch (err) {
+    console.error('Failed to send password setup email:', err.message);
+  }
+
+  res.json({
+    id: insertedId, username: username.trim(), email: email.trim(), is_admin: !!is_admin,
+    email_sent: emailResult.sent,
+    // Returned only when SMTP isn't configured, so the admin can copy the link manually.
+    setup_link: emailResult.sent ? undefined : link,
+  });
+});
+
+// Re-send the password setup email (generates a fresh token)
+app.post('/api/users/:id/resend-invite', requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const user = dbQueryOne('SELECT id, username, email FROM users WHERE id = ?', [id]);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (!user.email) return res.status(400).json({ error: 'User has no email address on file' });
+
+  // Invalidate prior pending tokens
+  db.run("UPDATE password_setup_token SET used_at = datetime('now') WHERE user_id = ? AND used_at IS NULL", [id]);
+
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+  db.run(
+    'INSERT INTO password_setup_token (user_id, token_hash, expires_at) VALUES (?, ?, ?)',
+    [id, tokenHash, expiresAt]
+  );
+  saveDB();
+
+  const link = `${publicOrigin(req)}/set-password/${rawToken}`;
+  let emailResult = { sent: false };
+  try {
+    emailResult = await sendPasswordSetupEmail({ to: user.email, username: user.username, link });
+  } catch (err) {
+    console.error('Failed to send password setup email:', err.message);
+  }
+  res.json({ email_sent: emailResult.sent, setup_link: emailResult.sent ? undefined : link });
+});
+
+app.delete('/api/users/:id', requireAdmin, (req, res) => {
+  const id = parseInt(req.params.id);
+  if (id === req.user.userId) return res.status(400).json({ error: "You can't delete your own account" });
+  db.run('DELETE FROM password_setup_token WHERE user_id = ?', [id]);
+  db.run('DELETE FROM mfa_secrets WHERE user_id = ?', [id]);
+  db.run('DELETE FROM users WHERE id = ?', [id]);
+  saveDB();
+  res.json({ success: true });
+});
+
+// ─── SMTP Settings (admin only) ───
+app.get('/api/smtp', requireAdmin, (req, res) => {
+  const s = getSmtpSettings();
+  const envConfigured = !!process.env.SMTP_HOST;
+  res.json({
+    host: s.host || '',
+    port: s.port || '',
+    secure: !!s.secure,
+    username: s.username || '',
+    passwordSet: !!s.password,
+    from_email: s.from_email || '',
+    from_name: s.from_name || '',
+    enabled: !!s.enabled,
+    updated_at: s.updated_at || null,
+    env_fallback: envConfigured,
+  });
+});
+
+app.put('/api/smtp', requireAdmin, (req, res) => {
+  const { host, port, secure, username, password, from_email, from_name, enabled } = req.body || {};
+  const current = getSmtpSettings();
+  const nextPassword = (password === undefined || password === null || password === '')
+    ? current.password
+    : password;
+  db.run(
+    `UPDATE smtp_settings SET host=?, port=?, secure=?, username=?, password=?, from_email=?, from_name=?, enabled=?, updated_at=datetime('now') WHERE id = 1`,
+    [
+      host || null,
+      port ? Number(port) : null,
+      secure ? 1 : 0,
+      username || null,
+      nextPassword || null,
+      from_email || null,
+      from_name || null,
+      enabled ? 1 : 0,
+    ]
+  );
+  saveDB();
+  res.json({ success: true });
+});
+
+app.post('/api/smtp/test', requireAdmin, async (req, res) => {
+  const { to } = req.body || {};
+  if (!to) return res.status(400).json({ error: 'Recipient address (to) is required' });
+
+  const saved = getSmtpSettings();
+  const override = req.body && req.body.settings ? req.body.settings : {};
+  const cfg = {
+    host: override.host ?? saved.host,
+    port: override.port ?? saved.port,
+    secure: override.secure ?? saved.secure,
+    user: override.username ?? saved.username,
+    pass: (override.password === undefined || override.password === '') ? saved.password : override.password,
+    from: (override.from_name ?? saved.from_name)
+      ? `"${override.from_name ?? saved.from_name}" <${override.from_email ?? saved.from_email}>`
+      : (override.from_email ?? saved.from_email),
+  };
+  if (!cfg.host || !cfg.port) return res.status(400).json({ error: 'SMTP host and port must be configured' });
+  if (!cfg.from) return res.status(400).json({ error: 'A "from" email address must be configured' });
+
+  try {
+    const transporter = buildTransporter(cfg);
+    await transporter.sendMail({
+      from: cfg.from,
+      to,
+      subject: 'WatchApp SMTP test',
+      text: 'This is a test message from WatchApp. If you received this, your SMTP settings are working.',
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Failed to send test email' });
+  }
+});
 
 // ─── Positions ───
 app.get('/api/positions', (req, res) => {

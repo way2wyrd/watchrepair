@@ -27,9 +27,17 @@ A self-hosted web application for managing a watch repair workshop: track repair
 
 ## Getting Started
 
-> **New to this?** See [SETUP.md](SETUP.md) for a beginner-friendly Windows setup guide with a one-click launcher script.
+### Windows quick start (no command-line experience required)
 
-### Prerequisites
+1. Install [Node.js LTS](https://nodejs.org) — click Next through all the installer defaults
+2. Download this repository as a ZIP (green **Code** button on GitHub → **Download ZIP**) and extract it
+3. Double-click **`start.bat`** inside the extracted folder
+
+`start.bat` installs dependencies, builds the frontend, opens your browser to `http://localhost:3001`, and starts the server — all automatically. On subsequent launches it skips the install/build steps and starts immediately.
+
+See [SETUP.md](SETUP.md) for the full step-by-step guide including troubleshooting.
+
+### Prerequisites (manual / developer setup)
 
 - Node.js 20 or later
 - npm
@@ -102,6 +110,8 @@ On a fresh install (no database yet), the app shows a **First-Time Setup** scree
 ```
 .
 ├── server.js              # Express API + SQLite (sql.js)
+├── start.bat              # Windows one-click launcher (install, build, open browser, start server)
+├── SETUP.md               # Beginner-friendly Windows setup guide
 ├── src/
 │   ├── App.jsx            # Layout, navigation, routing
 │   ├── api.js             # API client

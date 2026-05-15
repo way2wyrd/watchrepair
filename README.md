@@ -27,6 +27,8 @@ A self-hosted web application for managing a watch repair workshop: track repair
 
 ## Getting Started
 
+> **New to this?** See [SETUP.md](SETUP.md) for a beginner-friendly Windows setup guide with a one-click launcher script.
+
 ### Prerequisites
 
 - Node.js 20 or later

@@ -122,6 +122,7 @@ export const api = {
 
   // Profile
   changePassword: (data) => request('/auth/change-password', { method: 'POST', body: JSON.stringify(data) }),
+  updateProfile: (data) => request('/auth/profile', { method: 'PUT', body: JSON.stringify(data) }),
 
   // SMTP Settings (admin)
   getSmtpSettings: () => request('/smtp'),

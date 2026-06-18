@@ -5,8 +5,12 @@ import { api } from '../api';
 import PageHeader from '../components/PageHeader';
 import StatusBadge from '../components/StatusBadge';
 import { PHOTO_CATEGORIES, CategoryBadge } from '../components/PhotoCategories';
+import { useAuth } from '../context/AuthContext';
+import { formatCurrency } from '../utils/currency';
 
 export default function RepairDetail() {
+  const { user } = useAuth();
+  const currencyFormat = user?.currency_format || 'USD';
   const { id } = useParams();
   const navigate = useNavigate();
   const fileRef = useRef();
@@ -374,7 +378,7 @@ export default function RepairDetail() {
                       <div className="flex items-center gap-4 mt-1 text-xs text-stone-500">
                         {part.vendor && <span>Vendor: {part.vendor}</span>}
                         {part.dateOrdered && <span>Ordered: {part.dateOrdered}</span>}
-                        {part.cost && <span>${Number(part.cost).toFixed(2)}</span>}
+                        {part.cost && <span>{formatCurrency(part.cost, currencyFormat)}</span>}
                         {part.notes && <span className="text-stone-600 truncate max-w-[200px]">{part.notes}</span>}
                       </div>
                     </div>
@@ -394,7 +398,7 @@ export default function RepairDetail() {
               {watch.parts.some(p => p.cost) && (
                 <div className="flex justify-end pt-2 border-t border-stone-800/50">
                   <span className="text-sm text-stone-400">
-                    Total: <span className="text-gold-400 font-medium">${watch.parts.reduce((sum, p) => sum + (Number(p.cost) || 0), 0).toFixed(2)}</span>
+                    Total: <span className="text-gold-400 font-medium">{formatCurrency(watch.parts.reduce((sum, p) => sum + (Number(p.cost) || 0), 0), currencyFormat)}</span>
                   </span>
                 </div>
               )}

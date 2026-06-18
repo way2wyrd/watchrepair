@@ -40,7 +40,14 @@ export const api = {
   updateMovement: (id, data) => request(`/movements/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteMovement: (id) => request(`/movements/${id}`, { method: 'DELETE' }),
   uploadMovementPhotos: (movementId, formData) =>
-    fetch(`/api/movements/${movementId}/photos`, { method: 'POST', headers: getAuthHeader(), body: formData }).then(r => r.json()),
+    fetch(`/api/movements/${movementId}/photos`, { method: 'POST', headers: getAuthHeader(), body: formData }).then(async r => {
+      if (!r.ok) {
+        const text = await r.text();
+        try { const e = JSON.parse(text); throw new Error(e.error); }
+        catch (parseErr) { if (parseErr.message && !parseErr.message.includes('Unexpected')) throw parseErr; throw new Error(`Upload failed (${r.status})`); }
+      }
+      return r.json();
+    }),
   deleteMovementPhoto: (id) => request(`/movement-photos/${id}`, { method: 'DELETE' }),
 
   // Lookups
@@ -81,7 +88,14 @@ export const api = {
 
   // Photos (uses FormData, not JSON)
   uploadPhotos: (watchId, formData) =>
-    fetch(`${BASE}/watches/${watchId}/photos`, { method: 'POST', headers: getAuthHeader(), body: formData }).then(r => r.json()),
+    fetch(`${BASE}/watches/${watchId}/photos`, { method: 'POST', headers: getAuthHeader(), body: formData }).then(async r => {
+      if (!r.ok) {
+        const text = await r.text();
+        try { const e = JSON.parse(text); throw new Error(e.error); }
+        catch (parseErr) { if (parseErr.message && !parseErr.message.includes('Unexpected')) throw parseErr; throw new Error(`Upload failed (${r.status})`); }
+      }
+      return r.json();
+    }),
   updatePhoto: (id, data) => request(`/photos/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deletePhoto: (id) => request(`/photos/${id}`, { method: 'DELETE' }),
 

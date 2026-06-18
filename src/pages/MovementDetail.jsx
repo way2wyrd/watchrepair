@@ -27,6 +27,7 @@ export default function MovementDetail() {
   const [photos, setPhotos] = useState([]);
   const [uploadCategory, setUploadCategory] = useState('Front');
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!isNew);
 
@@ -90,16 +91,23 @@ export default function MovementDetail() {
   };
 
   const handlePhotoUpload = async (e) => {
-    const files = e.target.files;
+    const input = e.target;
+    const files = input.files;
     if (!files.length) return;
     setUploading(true);
+    setUploadError('');
     const formData = new FormData();
     Array.from(files).forEach(f => formData.append('photos', f));
     formData.append('category', uploadCategory);
-    await api.uploadMovementPhotos(id, formData);
-    e.target.value = '';
-    await fetchMovement();
-    setUploading(false);
+    try {
+      await api.uploadMovementPhotos(id, formData);
+      await fetchMovement();
+    } catch (err) {
+      setUploadError(err.message || 'Upload failed. Please try again.');
+    } finally {
+      setUploading(false);
+      input.value = '';
+    }
   };
 
   const handleDeletePhoto = async (photoId) => {
@@ -293,6 +301,10 @@ export default function MovementDetail() {
                   disabled={uploading} onChange={handlePhotoUpload} />
               </label>
             </div>
+
+            {uploadError && (
+              <p className="text-sm text-red-400 mb-6 -mt-3 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{uploadError}</p>
+            )}
 
             {/* Photo grid by category */}
             {photos.length === 0 ? (

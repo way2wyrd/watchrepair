@@ -111,6 +111,9 @@ const movementPhotoUpload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
+// Max number of images accepted in a single multi-file photo upload.
+const MAX_PHOTOS_PER_UPLOAD = 20;
+
 let db;
 
 async function initDB() {
@@ -1007,7 +1010,20 @@ app.delete('/api/movements/:id', (req, res) => {
 });
 
 // ─── Movement Photos ───
-app.post('/api/movements/:id/photos', movementPhotoUpload.array('photos', 10), (req, res) => {
+app.post('/api/movements/:id/photos', (req, res, next) => {
+  movementPhotoUpload.array('photos', MAX_PHOTOS_PER_UPLOAD)(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ error: 'One or more files exceed the 10MB per-photo limit.' });
+      }
+      if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+        return res.status(400).json({ error: `Too many files. Upload up to ${MAX_PHOTOS_PER_UPLOAD} photos at a time.` });
+      }
+      return res.status(400).json({ error: err.message });
+    }
+    next();
+  });
+}, (req, res) => {
   const movementId = parseInt(req.params.id);
   const category = req.body.category || 'Front';
   const inserted = [];
@@ -1246,7 +1262,20 @@ app.delete('/api/parts/:id', (req, res) => {
 });
 
 // ─── Photos ───
-app.post('/api/watches/:id/photos', upload.array('photos', 10), (req, res) => {
+app.post('/api/watches/:id/photos', (req, res, next) => {
+  upload.array('photos', MAX_PHOTOS_PER_UPLOAD)(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ error: 'One or more files exceed the 10MB per-photo limit.' });
+      }
+      if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+        return res.status(400).json({ error: `Too many files. Upload up to ${MAX_PHOTOS_PER_UPLOAD} photos at a time.` });
+      }
+      return res.status(400).json({ error: err.message });
+    }
+    next();
+  });
+}, (req, res) => {
   const watchId = parseInt(req.params.id);
   const caption = req.body.caption || '';
   const category = req.body.category || '';

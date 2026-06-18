@@ -18,6 +18,7 @@ export default function RepairDetail() {
   const [loading, setLoading] = useState(true);
   const [positions, setPositions] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [uploadMeta, setUploadMeta] = useState({ caption: '', category: '', description: '' });
   const [editingPhoto, setEditingPhoto] = useState(null);
@@ -57,16 +58,23 @@ export default function RepairDetail() {
     const files = e.target.files;
     if (!files.length) return;
     setUploading(true);
+    setUploadError('');
     const formData = new FormData();
     for (let i = 0; i < files.length; i++) formData.append('photos', files[i]);
     formData.append('caption', uploadMeta.caption);
     formData.append('category', uploadMeta.category);
     formData.append('description', uploadMeta.description);
-    await api.uploadPhotos(id, formData);
-    setUploadMeta({ caption: '', category: '', description: '' });
-    setShowUploadForm(false);
-    load();
-    setUploading(false);
+    try {
+      await api.uploadPhotos(id, formData);
+      setUploadMeta({ caption: '', category: '', description: '' });
+      setShowUploadForm(false);
+      load();
+    } catch (err) {
+      setUploadError(err.message || 'Upload failed. Please try again.');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
   };
 
   const handleUpdatePhoto = async (photoId, data) => {
@@ -417,7 +425,7 @@ export default function RepairDetail() {
                 <span className="text-xs text-stone-500 font-sans font-normal">({watch.photos.length})</span>
               )}
             </h3>
-            <button onClick={() => setShowUploadForm(!showUploadForm)} disabled={uploading}
+            <button onClick={() => { setShowUploadForm(!showUploadForm); setUploadError(''); }} disabled={uploading}
               className="inline-flex items-center gap-1.5 text-sm text-gold-400 hover:text-gold-300 transition-colors disabled:opacity-50">
               <Plus className="w-4 h-4" /> {showUploadForm ? 'Cancel' : 'Add Photos'}
             </button>
@@ -453,7 +461,10 @@ export default function RepairDetail() {
                 className="px-4 py-2 bg-gold-500/15 text-gold-400 rounded-lg text-sm font-medium hover:bg-gold-500/25 transition-colors border border-gold-500/20 disabled:opacity-50">
                 {uploading ? 'Uploading...' : 'Choose Files & Upload'}
               </button>
-              <p className="text-xs text-stone-600 mt-2">JPG, PNG, GIF, WebP up to 10MB. Category and metadata apply to all files in this upload.</p>
+              <p className="text-xs text-stone-600 mt-2">JPG, PNG, GIF, WebP up to 10MB each, up to 20 photos at a time. Category and metadata apply to all files in this upload.</p>
+              {uploadError && (
+                <p className="text-sm text-red-400 mt-3 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{uploadError}</p>
+              )}
             </div>
           )}
 

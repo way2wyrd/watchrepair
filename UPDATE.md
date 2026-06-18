@@ -86,7 +86,25 @@ If you originally set up the app by downloading a ZIP (the method in [SETUP.md](
 5. Double-click **`start.bat`** inside the **new** folder. It will install and build automatically, just like the first time.
 6. Once you've confirmed your data is all present and the new version works, you can delete the old folder.
 
-> **Tip:** If you'd like easier updates in the future, ask whoever set this up to reinstall using Git (see Option B in [SETUP.md](SETUP.md)). After that, you can update with a single double-click of `update.bat`.
+> **Tip:** Tired of the manual ZIP dance? You can turn your existing ZIP install into a Git install **once** and get one-click updates from then on — see below.
+
+---
+
+## Switching a ZIP Install to One-Click Updates
+
+If you originally installed from a ZIP, you can convert it into a Git install **in place** — without re-downloading or moving any files. After this, `update.bat` will update you with a single double-click forever after.
+
+You only need to do this once.
+
+1. Install [Git for Windows](https://git-scm.com/download/win) if you don't already have it — run the installer and click Next through the defaults.
+2. **Stop the app** (close the `start.bat` terminal window).
+3. In your existing app folder, double-click **`convert-to-git.bat`**.
+
+The script will back up your database, connect the folder to the project repository, download the latest version, and rebuild. Your data (database, photos, manuals) is left untouched; only the program's source files are updated.
+
+> **Heads-up:** This replaces the program's source files with the latest version, so any manual edits you made to the *code* are discarded. Your repairs, parts, photos, and settings are not code and are safe.
+
+When it finishes, launch with `start.bat` as usual — and from now on, just double-click `update.bat` to upgrade.
 
 ---
 

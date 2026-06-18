@@ -29,11 +29,30 @@ A self-hosted web application for managing a watch repair workshop: track repair
 
 ### Windows quick start (no command-line experience required)
 
-1. Install [Node.js LTS](https://nodejs.org) — click Next through all the installer defaults
-2. Download this repository as a ZIP (green **Code** button on GitHub → **Download ZIP**) and extract it
-3. Double-click **`start.bat`** inside the extracted folder
+First, install [Node.js LTS](https://nodejs.org) — click Next through all the installer defaults. Then get the app files using **one** of the two methods below.
 
-`start.bat` installs dependencies, builds the frontend, opens your browser to `http://localhost:3001`, and starts the server — all automatically. On subsequent launches it skips the install/build steps and starts immediately.
+#### Method A: Git clone (recommended — enables one-click updates)
+
+1. Install [Git for Windows](https://git-scm.com/download/win) — click Next through the installer defaults
+2. Open Command Prompt (press **Win + R**, type `cmd`, press Enter) and run:
+   ```bash
+   git clone https://github.com/way2wyrd/watchrepair.git
+   ```
+3. Open the new `watchrepair` folder and double-click **`start.bat`**
+
+Because this creates a `.git` folder, you can later upgrade with a single double-click of **`update.bat`**.
+
+#### Method B: Download ZIP (no Git required)
+
+1. On GitHub, click the green **Code** button → **Download ZIP**
+2. Right-click the downloaded ZIP → **Extract All...** and extract it
+3. Open the extracted folder and double-click **`start.bat`**
+
+This works without Git, but future upgrades have to be done manually (re-download the ZIP and copy your data folders over — see [Updating an existing install](#updating-an-existing-install)).
+
+---
+
+Whichever method you choose, `start.bat` installs dependencies, builds the frontend, opens your browser to `http://localhost:3001`, and starts the server — all automatically. On subsequent launches it skips the install/build steps and starts immediately.
 
 See [SETUP.md](SETUP.md) for the full step-by-step guide including troubleshooting.
 

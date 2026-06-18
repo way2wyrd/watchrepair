@@ -1,17 +1,38 @@
 import React, { useState } from 'react';
-import { KeyRound, User, ShieldCheck, Calendar, Mail } from 'lucide-react';
+import { KeyRound, User, ShieldCheck, Calendar, Mail, Coins } from 'lucide-react';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import PageHeader from '../components/PageHeader';
+import { CURRENCIES, DEFAULT_CURRENCY } from '../utils/currency';
 
 export default function Profile() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+
+  const [currency, setCurrency] = useState(user?.currency_format || DEFAULT_CURRENCY);
+  const [savingCurrency, setSavingCurrency] = useState(false);
+  const [currencySaved, setCurrencySaved] = useState(false);
+
+  async function handleChangeCurrency(value) {
+    setCurrency(value);
+    setCurrencySaved(false);
+    setSavingCurrency(true);
+    try {
+      const updated = await api.updateProfile({ currency_format: value });
+      updateUser(updated);
+      setCurrencySaved(true);
+    } catch {
+      // Revert on failure
+      setCurrency(user?.currency_format || DEFAULT_CURRENCY);
+    } finally {
+      setSavingCurrency(false);
+    }
+  }
 
   async function handleChangePassword(e) {
     e.preventDefault();
@@ -90,6 +111,33 @@ export default function Profile() {
             </div>
           )}
         </dl>
+      </div>
+
+      {/* Preferences */}
+      <div className="bg-stone-900 border border-stone-800 rounded-xl p-6 space-y-4">
+        <h2 className="text-sm font-semibold text-stone-300 uppercase tracking-wider flex items-center gap-2">
+          <Coins className="w-4 h-4" />
+          Preferences
+        </h2>
+
+        <div>
+          <label className="block text-xs text-stone-500 mb-1.5">Currency Format</label>
+          <div className="flex items-center gap-3">
+            <select
+              value={currency}
+              onChange={e => handleChangeCurrency(e.target.value)}
+              disabled={savingCurrency}
+              className="w-full bg-stone-800 border border-stone-700 rounded-lg px-3 py-2 text-sm text-stone-200 focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-gold-500/20 disabled:opacity-50"
+            >
+              {CURRENCIES.map(c => (
+                <option key={c.code} value={c.code}>{c.label}</option>
+              ))}
+            </select>
+            {savingCurrency && <span className="text-xs text-stone-500 shrink-0">Saving…</span>}
+            {currencySaved && !savingCurrency && <span className="text-xs text-emerald-400 shrink-0">Saved</span>}
+          </div>
+          <p className="text-xs text-stone-600 mt-1.5">Used to format part costs throughout the app.</p>
+        </div>
       </div>
 
       {/* Change password */}

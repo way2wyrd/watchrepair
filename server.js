@@ -354,6 +354,7 @@ async function initDB() {
   )`);
   try { db.run('ALTER TABLE users ADD COLUMN email TEXT'); } catch(e) {}
   try { db.run('ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0'); } catch(e) {}
+  try { db.run("ALTER TABLE users ADD COLUMN currency_format TEXT DEFAULT 'USD'"); } catch(e) {}
 
   db.run(`CREATE TABLE IF NOT EXISTS mfa_secrets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -608,13 +609,36 @@ app.post('/api/auth/mfa/verify', (req, res) => {
 });
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
-  const row = dbQueryOne('SELECT email, is_admin, created_at FROM users WHERE id = ?', [req.user.userId]);
+  const row = dbQueryOne('SELECT email, is_admin, created_at, currency_format FROM users WHERE id = ?', [req.user.userId]);
   res.json({
     userId: req.user.userId,
     username: req.user.username,
     email: row?.email || null,
     is_admin: !!row?.is_admin,
     created_at: row?.created_at || null,
+    currency_format: row?.currency_format || 'USD',
+  });
+});
+
+const ALLOWED_CURRENCIES = ['USD', 'EUR', 'GBP', 'CHF', 'JPY', 'CAD', 'AUD'];
+
+app.put('/api/auth/profile', requireAuth, (req, res) => {
+  const { currency_format } = req.body || {};
+  if (currency_format !== undefined) {
+    if (!ALLOWED_CURRENCIES.includes(currency_format)) {
+      return res.status(400).json({ error: 'Invalid currency format' });
+    }
+    db.run('UPDATE users SET currency_format = ? WHERE id = ?', [currency_format, req.user.userId]);
+    saveDB();
+  }
+  const row = dbQueryOne('SELECT email, is_admin, created_at, currency_format FROM users WHERE id = ?', [req.user.userId]);
+  res.json({
+    userId: req.user.userId,
+    username: req.user.username,
+    email: row?.email || null,
+    is_admin: !!row?.is_admin,
+    created_at: row?.created_at || null,
+    currency_format: row?.currency_format || 'USD',
   });
 });
 

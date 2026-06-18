@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Edit2, Trash2, ArrowLeft, Camera, X, Plus, Clock, Package, Check, Activity, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Edit2, Trash2, ArrowLeft, Camera, X, Plus, Clock, Package, Check, Activity, ChevronDown, ChevronRight, ChevronLeft, FileDown } from 'lucide-react';
 import { api } from '../api';
 import PageHeader from '../components/PageHeader';
 import StatusBadge from '../components/StatusBadge';
 import { PHOTO_CATEGORIES, CategoryBadge } from '../components/PhotoCategories';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currency';
+import { generateRepairPdf } from '../utils/repairPdf';
 
 export default function RepairDetail() {
   const { user } = useAuth();
@@ -28,6 +29,7 @@ export default function RepairDetail() {
   const [showPartForm, setShowPartForm] = useState(false);
   const [editingPart, setEditingPart] = useState(null);
   const [partForm, setPartForm] = useState({ partNumber: '', description: '', vendor: '', dateOrdered: '', cost: '', notes: '' });
+  const [exporting, setExporting] = useState(false);
 
   const load = () => {
     Promise.all([api.getWatch(id), api.getPositions()])
@@ -52,6 +54,18 @@ export default function RepairDetail() {
     if (!confirm('Delete this repair order and all associated data?')) return;
     await api.deleteWatch(id);
     navigate('/repairs');
+  };
+
+  const handleExportPdf = async () => {
+    if (!watch) return;
+    setExporting(true);
+    try {
+      await generateRepairPdf(watch);
+    } catch (err) {
+      alert('Could not generate PDF: ' + (err.message || 'unknown error'));
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handlePhotoUpload = async (e) => {
@@ -180,6 +194,9 @@ export default function RepairDetail() {
           <div className="flex gap-2">
             <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 px-4 py-2 text-sm text-stone-400 hover:text-stone-200 border border-stone-700 rounded-lg hover:bg-stone-800 transition-all">
               <ArrowLeft className="w-4 h-4" /> Back
+            </button>
+            <button onClick={handleExportPdf} disabled={exporting} className="inline-flex items-center gap-2 px-4 py-2 text-sm text-stone-300 hover:text-stone-100 border border-stone-700 rounded-lg hover:bg-stone-800 transition-all disabled:opacity-50">
+              <FileDown className="w-4 h-4" /> {exporting ? 'Generating…' : 'Export PDF'}
             </button>
             <Link to={`/repairs/${id}/edit`} className="inline-flex items-center gap-2 px-4 py-2 text-sm text-gold-400 border border-gold-500/30 rounded-lg hover:bg-gold-500/10 transition-all">
               <Edit2 className="w-4 h-4" /> Edit

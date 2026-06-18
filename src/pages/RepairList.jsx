@@ -1,15 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { PlusCircle, Eye, Edit2, Trash2, Filter } from 'lucide-react';
+import { PlusCircle, Eye, Edit2, Trash2, Filter, FileDown } from 'lucide-react';
 import { api } from '../api';
 import PageHeader from '../components/PageHeader';
 import StatusBadge, { STATUSES } from '../components/StatusBadge';
+import { generateRepairPdf } from '../utils/repairPdf';
 
 export default function RepairList() {
   const [repairs, setRepairs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
   const statusFilter = searchParams.get('status') || 'All';
+  const [exportingId, setExportingId] = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -22,6 +24,18 @@ export default function RepairList() {
     if (!confirm('Are you sure you want to delete this repair order?')) return;
     await api.deleteWatch(id);
     setRepairs(prev => prev.filter(r => r.id !== id));
+  };
+
+  const handleExport = async (id) => {
+    setExportingId(id);
+    try {
+      const full = await api.getWatch(id);
+      await generateRepairPdf(full);
+    } catch (err) {
+      alert('Could not generate PDF: ' + (err.message || 'unknown error'));
+    } finally {
+      setExportingId(null);
+    }
   };
 
   return (
@@ -94,6 +108,9 @@ export default function RepairList() {
                         <Link to={`/repairs/${r.id}/edit`} className="p-2 rounded-lg hover:bg-stone-700/50 text-stone-400 hover:text-stone-200 transition-colors" title="Edit">
                           <Edit2 className="w-4 h-4" />
                         </Link>
+                        <button onClick={() => handleExport(r.id)} disabled={exportingId === r.id} className="p-2 rounded-lg hover:bg-stone-700/50 text-stone-400 hover:text-gold-400 transition-colors disabled:opacity-50" title="Export PDF">
+                          <FileDown className={`w-4 h-4 ${exportingId === r.id ? 'animate-pulse' : ''}`} />
+                        </button>
                         <button onClick={() => handleDelete(r.id)} className="p-2 rounded-lg hover:bg-red-500/10 text-stone-400 hover:text-red-400 transition-colors" title="Delete">
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -116,6 +133,13 @@ export default function RepairList() {
                 <p className="text-sm font-medium text-stone-200">{[r.brand, r.model].filter(Boolean).join(' ') || 'Unknown Watch'}</p>
                 <p className="text-xs text-stone-400 mt-1">{r.customerName || 'No customer'}</p>
                 {r.serialNumber && <p className="text-xs text-stone-500 font-mono mt-1">SN: {r.serialNumber}</p>}
+                <button
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleExport(r.id); }}
+                  disabled={exportingId === r.id}
+                  className="mt-3 inline-flex items-center gap-1.5 text-xs text-gold-400 hover:text-gold-300 disabled:opacity-50"
+                >
+                  <FileDown className="w-3.5 h-3.5" /> {exportingId === r.id ? 'Generating…' : 'Export PDF'}
+                </button>
               </Link>
             ))}
           </div>

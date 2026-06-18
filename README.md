@@ -39,16 +39,56 @@ See [SETUP.md](SETUP.md) for the full step-by-step guide including troubleshooti
 
 ### Updating an existing install
 
-Already running an older version? Double-click **`update.bat`** to back up your data, pull the latest version, and rebuild automatically. See [UPDATE.md](UPDATE.md) for the full step-by-step upgrade guide (including how to update a ZIP-based install without losing data).
+From **1.1.0 onward**, double-click **`update.bat`** to back up your data, pull the latest version, and rebuild automatically. See [UPDATE.md](UPDATE.md) for the full step-by-step upgrade guide.
+
+> **`update.bat` only auto-updates Git installs.** It looks for a `.git` folder and runs `git pull`. If you installed by downloading a ZIP (no `.git` folder), it will detect that and show the manual steps instead — so a ZIP install can never become one-click. If you want one-click updates, install with `git clone` (see [Install](#install) below).
+
+Your data (the `WatchRepair.db3` database plus the `uploads`, `manuals`, and `movement-photos` folders) lives outside the program files and is never touched by an update. `update.bat` also makes a timestamped backup of the database under `backups/` before changing anything.
+
+#### Manual upgrade
+
+Use these steps when `update.bat` isn't available or can't run automatically.
+
+##### Upgrading from 1.0.0
+
+Version 1.0.0 shipped **before** `update.bat` existed, so the first upgrade must be done by hand.
+
+- **If you installed with Git** (there is a `.git` folder in the app folder):
+  1. Stop the app (close the `start.bat` terminal window).
+  2. Open a Command Prompt in the app folder and run:
+     ```bash
+     git pull
+     npm install
+     npm run build
+     ```
+  3. Double-click `start.bat`. You now have `update.bat`, so future upgrades are one-click.
+
+- **If you installed from a ZIP** (no `.git` folder):
+  1. Stop the app.
+  2. Download the latest ZIP (green **Code** button → **Download ZIP**) and extract it to a **new** folder.
+  3. Copy your data folders — `public`, `uploads`, `manuals`, `movement-photos` — from the old folder into the new one, replacing the empty versions.
+  4. Double-click `start.bat` in the new folder. (Because there's still no `.git` folder, future upgrades will use this same ZIP method.)
+
+##### Upgrading from 1.1.0 (or later)
+
+These versions include `update.bat`:
+
+- **Git installs:** double-click `update.bat` — it backs up the database, runs `git pull`, reinstalls dependencies, and rebuilds.
+- **ZIP installs:** `update.bat` will detect the missing `.git` folder and print the same download-and-copy steps shown above; follow those.
 
 ### Prerequisites (manual / developer setup)
 
 - Node.js 20 or later
 - npm
+- [Git for Windows](https://git-scm.com/download/win) — required for `git clone` installs and for one-click `update.bat` upgrades (optional if you only ever use ZIP downloads)
 
 ### Install
 
+Clone the repository (this gives you the `.git` folder that enables one-click `update.bat` upgrades), then install dependencies:
+
 ```bash
+git clone https://github.com/way2wyrd/watchrepair.git
+cd watchrepair
 npm install
 ```
 

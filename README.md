@@ -60,7 +60,7 @@ See [SETUP.md](SETUP.md) for the full step-by-step guide including troubleshooti
 
 From **1.1.0 onward**, double-click **`update.bat`** to back up your data, pull the latest version, and rebuild automatically. See [UPDATE.md](UPDATE.md) for the full step-by-step upgrade guide.
 
-> **`update.bat` only auto-updates Git installs.** It looks for a `.git` folder and runs `git pull`. If you installed by downloading a ZIP (no `.git` folder), it will detect that and show the manual steps instead — so a ZIP install can never become one-click. If you want one-click updates, install with `git clone` (see [Install](#install) below).
+> **`update.bat` only auto-updates Git installs.** It looks for a `.git` folder and runs `git pull`. If you installed by downloading a ZIP (no `.git` folder), it will detect that and show the manual steps instead. To get one-click updates on an existing ZIP install, run **`convert-to-git.bat`** once — it turns the folder into a Git install in place, without moving your data (see [UPDATE.md](UPDATE.md)). New installs can also just use `git clone` (see [Install](#install) below).
 
 Your data (the `WatchRepair.db3` database plus the `uploads`, `manuals`, and `movement-photos` folders) lives outside the program files and is never touched by an update. `update.bat` also makes a timestamped backup of the database under `backups/` before changing anything.
 
@@ -175,6 +175,7 @@ On a fresh install (no database yet), the app shows a **First-Time Setup** scree
 ├── server.js              # Express API + SQLite (sql.js)
 ├── start.bat              # Windows one-click launcher (install, build, open browser, start server)
 ├── update.bat             # Windows one-click updater (backup, pull latest, rebuild)
+├── convert-to-git.bat     # Converts a ZIP install into a Git install for one-click updates
 ├── SETUP.md               # Beginner-friendly Windows setup guide
 ├── UPDATE.md              # Beginner-friendly Windows upgrade guide
 ├── src/

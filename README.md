@@ -37,6 +37,10 @@ A self-hosted web application for managing a watch repair workshop: track repair
 
 See [SETUP.md](SETUP.md) for the full step-by-step guide including troubleshooting.
 
+### Updating an existing install
+
+Already running an older version? Double-click **`update.bat`** to back up your data, pull the latest version, and rebuild automatically. See [UPDATE.md](UPDATE.md) for the full step-by-step upgrade guide (including how to update a ZIP-based install without losing data).
+
 ### Prerequisites (manual / developer setup)
 
 - Node.js 20 or later
@@ -111,7 +115,9 @@ On a fresh install (no database yet), the app shows a **First-Time Setup** scree
 .
 ├── server.js              # Express API + SQLite (sql.js)
 ├── start.bat              # Windows one-click launcher (install, build, open browser, start server)
+├── update.bat             # Windows one-click updater (backup, pull latest, rebuild)
 ├── SETUP.md               # Beginner-friendly Windows setup guide
+├── UPDATE.md              # Beginner-friendly Windows upgrade guide
 ├── src/
 │   ├── App.jsx            # Layout, navigation, routing
 │   ├── api.js             # API client

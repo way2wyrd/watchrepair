@@ -1,28 +1,36 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Watch, Wrench, CheckCircle, Clock, Package, ArrowRight } from 'lucide-react';
+import { Watch, Wrench, CheckCircle, Clock, Package, PackageCheck, Truck, ArrowRight } from 'lucide-react';
 import { api } from '../api';
 import PageHeader from '../components/PageHeader';
+import StatusBadge, { STATUSES } from '../components/StatusBadge';
 
 const statIcons = {
   Received: Package,
   'In Progress': Wrench,
-  Completed: CheckCircle,
   'Awaiting Parts': Clock,
+  Completed: CheckCircle,
+  'Ready for Pickup': PackageCheck,
+  Delivered: Truck,
 };
 
+// Tile gradients mirror the StatusBadge palette so the dashboard and badges agree.
 const statColors = {
-  Received: 'from-blue-500/20 to-blue-600/5 border-blue-500/20',
+  Received: 'from-sky-500/20 to-sky-600/5 border-sky-500/20',
   'In Progress': 'from-amber-500/20 to-amber-600/5 border-amber-500/20',
-  Completed: 'from-emerald-500/20 to-emerald-600/5 border-emerald-500/20',
-  'Awaiting Parts': 'from-purple-500/20 to-purple-600/5 border-purple-500/20',
+  'Awaiting Parts': 'from-orange-500/20 to-orange-600/5 border-orange-500/20',
+  Completed: 'from-purple-500/20 to-purple-600/5 border-purple-500/20',
+  'Ready for Pickup': 'from-teal-500/20 to-teal-600/5 border-teal-500/20',
+  Delivered: 'from-green-500/20 to-green-600/5 border-green-500/20',
 };
 
 const statTextColors = {
-  Received: 'text-blue-400',
+  Received: 'text-sky-400',
   'In Progress': 'text-amber-400',
-  Completed: 'text-emerald-400',
-  'Awaiting Parts': 'text-purple-400',
+  'Awaiting Parts': 'text-orange-400',
+  Completed: 'text-purple-400',
+  'Ready for Pickup': 'text-teal-400',
+  Delivered: 'text-green-400',
 };
 
 export default function Dashboard() {
@@ -62,8 +70,8 @@ export default function Dashboard() {
         </div>
 
         {/* Status Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {['Received', 'In Progress', 'Awaiting Parts', 'Completed'].map(status => {
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {STATUSES.map(status => {
             const Icon = statIcons[status] || Package;
             const count = stats.byStatus[status] || 0;
             return (
@@ -121,12 +129,7 @@ export default function Dashboard() {
                       <td className="px-4 sm:px-6 py-4 text-sm text-stone-300">{r.customerName || '—'}</td>
                       <td className="px-4 sm:px-6 py-4 text-sm text-stone-300">{[r.brand, r.model].filter(Boolean).join(' ') || '—'}</td>
                       <td className="px-4 sm:px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                          ${r.status === 'Completed' ? 'bg-emerald-500/15 text-emerald-400' :
-                            r.status === 'In Progress' ? 'bg-amber-500/15 text-amber-400' :
-                            'bg-blue-500/15 text-blue-400'}`}>
-                          {r.status}
-                        </span>
+                        <StatusBadge status={r.status} />
                       </td>
                       <td className="px-4 sm:px-6 py-4 text-sm text-stone-500 hidden sm:table-cell">{r.serialNumber || '—'}</td>
                     </tr>

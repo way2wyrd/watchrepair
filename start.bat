@@ -35,11 +35,25 @@ if not exist "node_modules\" (
     )
 )
 
-:: Build the frontend on first run (or if dist is missing)
-if not exist "dist\" (
+:: Decide whether the frontend needs (re)building. We rebuild when dist is
+:: missing OR when the version baked into dist no longer matches package.json.
+:: This way an updated copy always serves the new code, even if an old dist
+:: folder was left behind (a common cause of "I updated but nothing changed").
+set "APPVER="
+for /f "usebackq delims=" %%v in (`node -p "require('./package.json').version" 2^>nul`) do set "APPVER=%%v"
+
+set "BUILTVER="
+if exist "dist\build-version.txt" set /p BUILTVER=<"dist\build-version.txt"
+
+set "NEEDBUILD="
+if not exist "dist\" set "NEEDBUILD=1"
+if not "%APPVER%"=="%BUILTVER%" set "NEEDBUILD=1"
+
+if defined NEEDBUILD (
     echo.
-    echo  Building the app -- this only happens once, please wait...
+    echo  Building the app -- please wait...
     echo.
+    if exist "dist\" rmdir /s /q "dist"
     call npm run build
     if errorlevel 1 (
         echo.

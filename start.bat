@@ -49,6 +49,18 @@ set "NEEDBUILD="
 if not exist "dist\" set "NEEDBUILD=1"
 if not "%APPVER%"=="%BUILTVER%" set "NEEDBUILD=1"
 
+:: Also rebuild if any frontend source file is newer than the last build.
+:: This catches code edits that did not bump the version number (development,
+:: or a partial manual update). dist\build-version.txt is written at the very
+:: end of every build, so its timestamp marks when the current dist was made.
+:: Only the build inputs are checked -- data folders like public (which holds
+:: the live database) are deliberately excluded so they never force a rebuild.
+if defined NEEDBUILD goto :build_decided
+if not exist "dist\build-version.txt" goto :build_decided
+powershell -NoProfile -Command "$marker='dist\build-version.txt'; $built=(Get-Item $marker).LastWriteTimeUtc; $newest=Get-ChildItem -File -Recurse -ErrorAction SilentlyContinue 'src','index.html','vite.config.js','package.json' | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1; if ($newest -and $newest.LastWriteTimeUtc -gt $built) { exit 1 }"
+if errorlevel 1 set "NEEDBUILD=1"
+:build_decided
+
 if defined NEEDBUILD (
     echo.
     echo  Building the app -- please wait...

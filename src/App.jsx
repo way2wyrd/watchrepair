@@ -385,6 +385,7 @@ function AppLayout({ user, logout }) {
             <LogOut className="w-3.5 h-3.5" />
             Sign Out
           </button>
+          <p className="text-center text-[10px] text-stone-600 mt-2">v {__APP_VERSION__}</p>
         </div>
       </aside>
 

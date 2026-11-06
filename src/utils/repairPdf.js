@@ -30,6 +30,15 @@ const fmtRate = (v) => {
 
 const HORIZONTAL_POSITIONS = ['Dial Up', 'DU', 'Dial Down', 'DD'];
 
+// Format a date value (ISO, date-only, or "YYYY-MM-DD HH:MM:SS") without
+// timezone drift for date-only inputs.
+const fmtDate = (d) => {
+  if (!d) return '';
+  const s = String(d).length <= 10 ? `${d}T00:00` : String(d).replace(' ', 'T');
+  const dt = new Date(s);
+  return isNaN(dt.getTime()) ? String(d) : dt.toLocaleDateString();
+};
+
 function sessionSummary(session) {
   const rates = (session.readings || [])
     .filter((r) => r.rate !== null && r.rate !== undefined && r.rate !== '')
@@ -124,9 +133,9 @@ export function buildRepairDoc(watch, images = {}, opts = {}) {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.setTextColor(190, 186, 181);
-  const created = watch.createdAt ? new Date(watch.createdAt).toLocaleDateString() : '';
+  const received = fmtDate(watch.receivedAt || watch.createdAt);
   const issued = new Date().toLocaleDateString();
-  if (created) doc.text(`Received: ${created}`, PAGE_W - MARGIN, 20, { align: 'right' });
+  if (received) doc.text(`Received: ${received}`, PAGE_W - MARGIN, 20, { align: 'right' });
   doc.text(`Issued: ${issued}`, PAGE_W - MARGIN, 25.5, { align: 'right' });
 
   y = 40;

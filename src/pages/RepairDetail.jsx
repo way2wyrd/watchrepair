@@ -30,6 +30,9 @@ export default function RepairDetail() {
   const [editingPart, setEditingPart] = useState(null);
   const [partForm, setPartForm] = useState({ partNumber: '', description: '', vendor: '', dateOrdered: '', cost: '', notes: '' });
   const [exporting, setExporting] = useState(false);
+  const [editingReceived, setEditingReceived] = useState(false);
+  const [receivedValue, setReceivedValue] = useState('');
+  const [savingReceived, setSavingReceived] = useState(false);
 
   const load = () => {
     Promise.all([api.getWatch(id), api.getPositions()])
@@ -54,6 +57,31 @@ export default function RepairDetail() {
     if (!confirm('Delete this repair order and all associated data?')) return;
     await api.deleteWatch(id);
     navigate('/repairs');
+  };
+
+  const fmtDate = (d) => {
+    if (!d) return '—';
+    const s = String(d).length <= 10 ? `${d}T00:00` : String(d).replace(' ', 'T');
+    const dt = new Date(s);
+    return isNaN(dt.getTime()) ? String(d) : dt.toLocaleDateString();
+  };
+
+  const startEditReceived = () => {
+    setReceivedValue(String(watch.receivedAt || watch.createdAt || '').slice(0, 10));
+    setEditingReceived(true);
+  };
+
+  const handleSaveReceived = async () => {
+    setSavingReceived(true);
+    try {
+      await api.updateWatch(id, { ...watch, receivedAt: receivedValue || null });
+      setEditingReceived(false);
+      load();
+    } catch (err) {
+      alert('Could not update date received: ' + (err.message || 'unknown error'));
+    } finally {
+      setSavingReceived(false);
+    }
   };
 
   const handleExportPdf = async () => {
@@ -218,12 +246,37 @@ export default function RepairDetail() {
                 {watch.customerName || 'Unknown Customer'}
               </h3>
             </div>
-            {watch.createdAt && (
-              <div className="text-right">
-                <p className="text-xs text-stone-500">Created</p>
-                <p className="text-sm text-stone-400">{new Date(watch.createdAt).toLocaleDateString()}</p>
+            <div className="text-right space-y-2">
+              <div>
+                <p className="text-xs text-stone-500 uppercase tracking-wider">Date Received</p>
+                {editingReceived ? (
+                  <div className="flex items-center justify-end gap-1 mt-1">
+                    <input type="date" value={receivedValue} onChange={e => setReceivedValue(e.target.value)}
+                      className="bg-stone-800/60 border border-stone-700 rounded-lg px-2 py-1 text-sm text-stone-200 focus:outline-none focus:border-gold-500/50" />
+                    <button onClick={handleSaveReceived} disabled={savingReceived} title="Save"
+                      className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/10 transition-colors disabled:opacity-50">
+                      <Check className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => setEditingReceived(false)} title="Cancel"
+                      className="p-1.5 rounded-lg text-stone-500 hover:text-stone-300 hover:bg-stone-800 transition-colors">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={startEditReceived} title="Edit date received"
+                    className="group inline-flex items-center gap-1.5 mt-0.5">
+                    <span className="text-sm text-stone-300">{fmtDate(watch.receivedAt || watch.createdAt)}</span>
+                    <Edit2 className="w-3 h-3 text-stone-600 group-hover:text-gold-400 transition-colors" />
+                  </button>
+                )}
               </div>
-            )}
+              {watch.createdAt && (
+                <div>
+                  <p className="text-xs text-stone-500">Created</p>
+                  <p className="text-sm text-stone-400">{fmtDate(watch.createdAt)}</p>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">

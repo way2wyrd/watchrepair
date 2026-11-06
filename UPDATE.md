@@ -1,10 +1,17 @@
 # Updating Fricking Watch Repair on Windows
 
-This guide walks you through updating an existing installation to the latest version (for example, upgrading from **1.0** to **1.1**). No programming or command-line experience is required — just follow each step in order.
+This guide walks you through updating an existing installation to the latest version (for example, upgrading from **1.1** to **1.2**). No programming or command-line experience is required — just follow each step in order.
 
 If you have never installed the app before, use [SETUP.md](SETUP.md) instead — this guide is only for people who already have it running.
 
 ---
+
+## What's New in 1.2
+
+- **Date Received on repairs** — new repairs now record a received date (defaulting to today), you can edit it right from the repair page, and it prints as "Received" on the generated PDF. Existing repairs are backfilled from their creation date automatically.
+- **Parts Ordered tab** — a new tab on the Parts page lists every part ordered across all repairs, showing the part, customer, model, vendor, and order date. View, edit, or delete any ordered part, and filter by status or sort by any column. Ordered parts stay separate from your parts inventory.
+
+See the full [release notes](https://github.com/way2wyrd/watchrepair/releases/tag/v1.2.0) for details.
 
 ## What's New in 1.1
 
@@ -13,7 +20,7 @@ If you have never installed the app before, use [SETUP.md](SETUP.md) instead —
 - **Distinct status badge colors** — each repair status now has its own color, with green for Delivered.
 - **Multi-photo upload fix** — uploading several photos at once no longer fails.
 
-See the full [release notes](https://github.com/way2wyrd/watchrepair/releases/tag/v1.1.0) for details.
+See the full [1.1 release notes](https://github.com/way2wyrd/watchrepair/releases/tag/v1.1.0) for details.
 
 ---
 
@@ -112,7 +119,7 @@ When it finishes, launch with `start.bat` as usual — and from now on, just dou
 
 1. Open your browser to `http://localhost:3001` and log in as usual.
 2. Check that your existing repairs, parts, and photos are all there.
-3. Try one of the new features — for example, open a repair and look for the new **Export PDF** option.
+3. Try one of the new features — for example, open the **Parts** page and click the new **Parts Ordered** tab, or open a repair and check the editable **Date Received**.
 
 ---
 

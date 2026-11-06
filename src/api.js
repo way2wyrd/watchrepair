@@ -66,6 +66,8 @@ export const api = {
   deleteTimingReading: (id) => request(`/timing-readings/${id}`, { method: 'DELETE' }),
 
   // Watch-linked Parts
+  getOrderedParts: () => request('/parts/ordered'),
+  getOrderedPart: (id) => request(`/parts/ordered/${id}`),
   addPart: (watchId, data) => request(`/watches/${watchId}/parts`, { method: 'POST', body: JSON.stringify(data) }),
   updatePart: (id, data) => request(`/parts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deletePart: (id) => request(`/parts/${id}`, { method: 'DELETE' }),

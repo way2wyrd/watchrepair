@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Plus, Trash2, Edit2, Package, Hash, BookOpen, ChevronUp, ChevronDown, X } from 'lucide-react';
+import { Search, Plus, Trash2, Edit2, Package, Hash, BookOpen, ChevronUp, ChevronDown, X, Eye, ShoppingCart, Check } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import PageHeader from '../components/PageHeader';
@@ -73,13 +73,15 @@ export default function Parts() {
   useEffect(() => { fetchParts(); fetchCodes(); }, []);
 
   const setTab = (t) => setSearchParams(t === 'inventory' ? {} : { tab: t });
-  const activeTab = tab === 'ebauche' || tab === 'reference' ? tab : 'inventory';
+  const activeTab = ['ordered', 'ebauche', 'reference'].includes(tab) ? tab : 'inventory';
 
   return (
     <div>
       <PageHeader
-        title="Parts Inventory"
-        subtitle={activeTab === 'inventory'
+        title={activeTab === 'ordered' ? 'Parts Ordered' : 'Parts Inventory'}
+        subtitle={activeTab === 'ordered'
+          ? 'Ordered parts across all repairs'
+          : activeTab === 'inventory'
           ? `${parts.length} part${parts.length !== 1 ? 's' : ''}`
           : activeTab === 'ebauche'
           ? `${ebaucheCodes.length} ebauche code${ebaucheCodes.length !== 1 ? 's' : ''}`
@@ -91,6 +93,7 @@ export default function Parts() {
         <div className="flex gap-1 mb-6 bg-stone-900/50 rounded-xl p-1 w-fit border border-stone-800">
           {[
             { key: 'inventory', label: 'Inventory', icon: Package },
+            { key: 'ordered', label: 'Parts Ordered', icon: ShoppingCart },
             { key: 'ebauche', label: 'Ebauche Codes', icon: Hash },
             { key: 'reference', label: 'Ebauches SA', icon: BookOpen },
           ].map(({ key, label, icon: Icon }) => (
@@ -106,6 +109,7 @@ export default function Parts() {
           ))}
         </div>
 
+        {activeTab === 'ordered' && <OrderedPartsSection />}
         {activeTab === 'inventory' && (
           <InventoryTab
             parts={parts}
@@ -381,6 +385,200 @@ function InventoryTab({ parts, ebaucheCodes, loading, typeFilter, setSearchParam
         </>
       )}
     </>
+  );
+}
+
+function OrderedPartsSection() {
+  const navigate = useNavigate();
+  const [parts, setParts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortCol, setSortCol] = useState('');
+  const [sortDir, setSortDir] = useState('asc');
+
+  const handleSort = (col) => {
+    if (sortCol === col) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortCol(col); setSortDir('asc'); }
+  };
+
+  const fetchOrdered = () => {
+    setLoading(true);
+    api.getOrderedParts()
+      .then(data => { setParts(data); setLoading(false); })
+      .catch(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchOrdered(); }, []);
+
+  const handleDelete = async (part) => {
+    if (!confirm('Delete this ordered part?')) return;
+    await api.deletePart(part.id);
+    fetchOrdered();
+  };
+
+  const handleToggleReceived = async (part) => {
+    await api.updatePart(part.id, { ...part, received: part.received ? 0 : 1 });
+    fetchOrdered();
+  };
+
+  const searched = parts.filter(p => {
+    if (statusFilter === 'on_order' && p.received) return false;
+    if (statusFilter === 'received' && !p.received) return false;
+    if (!search.trim()) return true;
+    const s = search.toLowerCase();
+    return (
+      (p.partNumber || '').toLowerCase().includes(s) ||
+      (p.description || '').toLowerCase().includes(s) ||
+      (p.customerName || '').toLowerCase().includes(s) ||
+      (p.brand || '').toLowerCase().includes(s) ||
+      (p.model || '').toLowerCase().includes(s) ||
+      (p.vendor || '').toLowerCase().includes(s)
+    );
+  });
+
+  const sortVal = (p, col) => {
+    switch (col) {
+      case 'part': return (p.partNumber || p.description || '').toLowerCase();
+      case 'customer': return (p.customerName || '').toLowerCase();
+      case 'model': return [p.brand, p.model].filter(Boolean).join(' ').toLowerCase();
+      case 'vendor': return (p.vendor || '').toLowerCase();
+      case 'ordered': return p.dateOrdered || '';
+      case 'status': return p.received ? 1 : 0;
+      default: return 0;
+    }
+  };
+
+  const filtered = sortCol
+    ? [...searched].sort((a, b) => {
+        const av = sortVal(a, sortCol), bv = sortVal(b, sortCol);
+        const cmp = typeof av === 'number' && typeof bv === 'number'
+          ? av - bv
+          : String(av).localeCompare(String(bv));
+        return sortDir === 'asc' ? cmp : -cmp;
+      })
+    : searched;
+
+  const pending = parts.filter(p => !p.received).length;
+
+  return (
+    <div className="glass rounded-xl mb-8 overflow-hidden border border-stone-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 border-b border-stone-800 bg-stone-900/40">
+        <div className="flex items-center gap-2.5">
+          <ShoppingCart className="w-5 h-5 text-gold-400" />
+          <div>
+            <h3 className="text-base font-serif font-semibold text-stone-100">Parts Ordered</h3>
+            <p className="text-xs text-stone-500">
+              Across all repairs{parts.length > 0 ? ` · ${pending} on order, ${parts.length - pending} received` : ''}
+            </p>
+          </div>
+        </div>
+        {parts.length > 0 && (
+          <div className="relative sm:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-500" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search ordered parts..."
+              className="w-full bg-stone-800/50 border border-stone-700 rounded-lg pl-10 pr-3 py-2 text-sm text-stone-200 placeholder-stone-500 focus:outline-none focus:border-gold-500/50"
+            />
+          </div>
+        )}
+      </div>
+
+      {parts.length > 0 && (
+        <div className="flex items-center gap-2 px-5 py-3 border-b border-stone-800/60">
+          <span className="text-xs text-stone-600 mr-1">Status:</span>
+          {[['all', 'All'], ['on_order', 'On order'], ['received', 'Received']].map(([key, label]) => (
+            <button key={key} onClick={() => setStatusFilter(key)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                statusFilter === key ? 'bg-gold-500/15 text-gold-400 border border-gold-500/30' : 'text-stone-500 hover:text-stone-300 border border-transparent hover:border-stone-700'
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <div className="w-7 h-7 border-2 border-gold-500/30 border-t-gold-500 rounded-full animate-spin" />
+        </div>
+      ) : parts.length === 0 ? (
+        <div className="px-5 py-10 text-center">
+          <ShoppingCart className="w-10 h-10 text-stone-700 mx-auto mb-3" />
+          <p className="text-stone-400 font-serif">No parts have been ordered yet</p>
+          <p className="text-sm text-stone-500 mt-1">Parts ordered on a repair will appear here.</p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="px-5 py-10 text-center text-sm text-stone-500">No ordered parts match your filters.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="group border-b border-stone-800 text-xs text-stone-500 uppercase tracking-wider">
+                <th className="px-5 py-3 w-14"></th>
+                <SortHeader label="Part" sortKey="part" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                <SortHeader label="Customer" sortKey="customer" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                <SortHeader label="Model" sortKey="model" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                <SortHeader label="Vendor" sortKey="vendor" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                <SortHeader label="Ordered" sortKey="ordered" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                <SortHeader label="Status" sortKey="status" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                <th className="px-5 py-3 w-28"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-800/60">
+              {filtered.map(part => (
+                <tr key={part.id} className="group hover:bg-stone-800/20 transition-colors">
+                  <td className="px-5 py-3">
+                    <PartRefImage partNumber={part.partNumber} className="w-10 h-10" />
+                  </td>
+                  <td className="px-5 py-3">
+                    <div className="flex flex-col gap-0.5">
+                      {part.partNumber && <span className="font-mono text-gold-400 text-sm">{part.partNumber}</span>}
+                      <span className="text-stone-200">{part.description || <span className="text-stone-600">—</span>}</span>
+                    </div>
+                  </td>
+                  <td className="px-5 py-3 text-stone-300">{part.customerName || <span className="text-stone-600">—</span>}</td>
+                  <td className="px-5 py-3 text-stone-300">
+                    {[part.brand, part.model].filter(Boolean).join(' ') || <span className="text-stone-600">—</span>}
+                  </td>
+                  <td className="px-5 py-3 text-stone-400">{part.vendor || <span className="text-stone-600">—</span>}</td>
+                  <td className="px-5 py-3 text-stone-400 tabular-nums">{part.dateOrdered || <span className="text-stone-600">—</span>}</td>
+                  <td className="px-5 py-3">
+                    <button onClick={() => handleToggleReceived(part)}
+                      title={part.received ? 'Mark as on order' : 'Mark as received'}
+                      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-xs transition-colors ${
+                        part.received
+                          ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20'
+                          : 'text-amber-400 bg-amber-500/10 border-amber-500/20 hover:bg-amber-500/20'
+                      }`}>
+                      {part.received ? <><Check className="w-3 h-3" /> Received</> : 'On order'}
+                    </button>
+                  </td>
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-1 xl:opacity-0 xl:group-hover:opacity-100 transition-opacity justify-end">
+                      <button onClick={() => navigate(`/repairs/${part.watchId}`)} title="View repair"
+                        className="p-1.5 rounded-lg text-stone-600 hover:text-gold-400 hover:bg-gold-500/10 transition-all">
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => navigate(`/ordered-parts/${part.id}/edit`)} title="Edit ordered part"
+                        className="p-1.5 rounded-lg text-stone-600 hover:text-gold-400 hover:bg-gold-500/10 transition-all">
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => handleDelete(part)} title="Delete ordered part"
+                        className="p-1.5 rounded-lg text-stone-600 hover:text-red-400 hover:bg-red-500/10 transition-all">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
 

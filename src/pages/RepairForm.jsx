@@ -17,10 +17,11 @@ export default function RepairForm() {
   const [showNewType, setShowNewType] = useState(false);
   const [newTypeName, setNewTypeName] = useState('');
 
+  const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
     customerName: '', brand: '', model: '', serialNumber: '',
     yearMade: '', dialColor: '', notes: '', status: 'Received',
-    movement: '', estimatedCompletion: '',
+    movement: '', estimatedCompletion: '', receivedAt: today,
   });
 
   const [newMovement, setNewMovement] = useState({
@@ -37,6 +38,7 @@ export default function RepairForm() {
           serialNumber: w.serialNumber || '', yearMade: w.yearMade || '', dialColor: w.dialColor || '',
           notes: w.notes || '', status: w.status || 'Received', movement: w.movement || '',
           estimatedCompletion: w.estimatedCompletion || '',
+          receivedAt: (w.receivedAt || w.createdAt || '').slice(0, 10),
         });
       });
     }
@@ -115,6 +117,10 @@ export default function RepairForm() {
             <div>
               <label className={labelClass}>Brand</label>
               <input name="brand" value={form.brand} onChange={handleChange} placeholder="Rolex, Omega, Seiko..." className={inputClass} />
+            </div>
+            <div>
+              <label className={labelClass}>Date Received</label>
+              <input type="date" name="receivedAt" value={form.receivedAt} onChange={handleChange} className={inputClass} />
             </div>
             <div>
               <label className={labelClass}>Model</label>

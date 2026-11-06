@@ -16,6 +16,7 @@ import Movements from './pages/Movements';
 import MovementDetail from './pages/MovementDetail';
 import Parts from './pages/Parts';
 import PartForm from './pages/PartForm';
+import OrderedPartForm from './pages/OrderedPartForm';
 import Users from './pages/Users';
 import SetPasswordPage from './pages/SetPasswordPage';
 import AdminSmtp from './pages/AdminSmtp';
@@ -405,6 +406,7 @@ function AppLayout({ user, logout }) {
             <Route path="/parts" element={<Parts />} />
             <Route path="/parts/new" element={<PartForm />} />
             <Route path="/parts/:id/edit" element={<PartForm />} />
+            <Route path="/ordered-parts/:id/edit" element={<OrderedPartForm />} />
             <Route path="/search" element={<SearchPage />} />
             <Route path="/users" element={<Users />} />
             <Route path="/admin/smtp" element={<AdminSmtp />} />

@@ -173,6 +173,7 @@ async function initDB() {
     brand TEXT DEFAULT '',
     model TEXT DEFAULT '',
     estimatedCompletion DATETIME,
+    receivedAt DATETIME,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
@@ -260,7 +261,10 @@ async function initDB() {
   try { db.run('ALTER TABLE watch ADD COLUMN brand TEXT DEFAULT ""'); } catch(e) {}
   try { db.run('ALTER TABLE watch ADD COLUMN model TEXT DEFAULT ""'); } catch(e) {}
   try { db.run('ALTER TABLE watch ADD COLUMN estimatedCompletion DATETIME'); } catch(e) {}
+  try { db.run('ALTER TABLE watch ADD COLUMN receivedAt DATETIME'); } catch(e) {}
   try { db.run('ALTER TABLE watch ADD COLUMN createdAt DATETIME DEFAULT CURRENT_TIMESTAMP'); } catch(e) {}
+  // Backfill received date from creation date for existing repairs
+  try { db.run("UPDATE watch SET receivedAt = createdAt WHERE receivedAt IS NULL"); } catch(e) {}
 
   // Add frequency, liftAngle, launchYear columns to movement if missing
   try { db.run('ALTER TABLE movement ADD COLUMN frequency INTEGER'); } catch(e) {}
@@ -1054,7 +1058,7 @@ app.get('/api/watches', (req, res) => {
   const { search, status } = req.query;
   let sql = `
     SELECT w.id, w.yearMade, w.serialNumber, w.dialColor, w.notes,
-           w.status, w.customerName, w.brand, w.model, w.estimatedCompletion, w.createdAt,
+           w.status, w.customerName, w.brand, w.model, w.estimatedCompletion, w.createdAt, w.receivedAt,
            m.name as movementName, m.manufacturer, m.jewels, m.caliber,
            mt.description as movementType
     FROM watch w
@@ -1077,9 +1081,9 @@ app.get('/api/watches', (req, res) => {
   res.json(results[0].values.map(r => ({
     id: r[0], yearMade: r[1], serialNumber: r[2], dialColor: r[3], notes: r[4],
     status: r[5], customerName: r[6], brand: r[7], model: r[8],
-    estimatedCompletion: r[9], createdAt: r[10],
-    movementName: r[11], manufacturer: r[12], jewels: r[13],
-    caliber: r[14], movementType: r[15],
+    estimatedCompletion: r[9], createdAt: r[10], receivedAt: r[11],
+    movementName: r[12], manufacturer: r[13], jewels: r[14],
+    caliber: r[15], movementType: r[16],
   })));
 });
 
@@ -1135,12 +1139,13 @@ app.get('/api/watches/:id', (req, res) => {
 });
 
 app.post('/api/watches', (req, res) => {
-  const { yearMade, serialNumber, dialColor, notes, movement, status, customerName, brand, model, estimatedCompletion } = req.body;
+  const { yearMade, serialNumber, dialColor, notes, movement, status, customerName, brand, model, estimatedCompletion, receivedAt } = req.body;
   db.run(
-    `INSERT INTO watch (yearMade, serialNumber, dialColor, notes, movement, status, customerName, brand, model, estimatedCompletion, createdAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+    `INSERT INTO watch (yearMade, serialNumber, dialColor, notes, movement, status, customerName, brand, model, estimatedCompletion, receivedAt, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
     [yearMade || null, serialNumber || null, dialColor || null, notes || null,
-     movement, status || 'Received', customerName || '', brand || '', model || '', estimatedCompletion || null]
+     movement, status || 'Received', customerName || '', brand || '', model || '', estimatedCompletion || null,
+     receivedAt || new Date().toISOString().slice(0, 10)]
   );
   const result = db.exec('SELECT last_insert_rowid()');
   const newId = result[0].values[0][0];
@@ -1150,11 +1155,11 @@ app.post('/api/watches', (req, res) => {
 
 app.put('/api/watches/:id', (req, res) => {
   const id = parseInt(req.params.id);
-  const { yearMade, serialNumber, dialColor, notes, movement, status, customerName, brand, model, estimatedCompletion } = req.body;
+  const { yearMade, serialNumber, dialColor, notes, movement, status, customerName, brand, model, estimatedCompletion, receivedAt } = req.body;
   db.run(
-    `UPDATE watch SET yearMade=?, serialNumber=?, dialColor=?, notes=?, movement=?, status=?, customerName=?, brand=?, model=?, estimatedCompletion=? WHERE id=?`,
+    `UPDATE watch SET yearMade=?, serialNumber=?, dialColor=?, notes=?, movement=?, status=?, customerName=?, brand=?, model=?, estimatedCompletion=?, receivedAt=? WHERE id=?`,
     [yearMade || null, serialNumber || null, dialColor || null, notes || null,
-     movement, status || 'Received', customerName || '', brand || '', model || '', estimatedCompletion || null, id]
+     movement, status || 'Received', customerName || '', brand || '', model || '', estimatedCompletion || null, receivedAt || null, id]
   );
   saveDB();
   res.json({ success: true });
@@ -1232,6 +1237,42 @@ app.delete('/api/timing-readings/:id', (req, res) => {
 });
 
 // ─── Parts ───
+// All ordered parts across every repair, with the owning repair's customer/model.
+app.get('/api/parts/ordered', (req, res) => {
+  const results = db.exec(`
+    SELECT p.id, p.watchId, p.partNumber, p.description, p.vendor, p.dateOrdered, p.received, p.cost, p.notes, p.createdAt,
+           w.customerName, w.brand, w.model, w.status
+    FROM part p
+    JOIN watch w ON p.watchId = w.id
+    ORDER BY p.received ASC, p.createdAt DESC
+  `);
+  if (!results.length) return res.json([]);
+  res.json(results[0].values.map(r => ({
+    id: r[0], watchId: r[1], partNumber: r[2], description: r[3], vendor: r[4],
+    dateOrdered: r[5], received: r[6], cost: r[7], notes: r[8], createdAt: r[9],
+    customerName: r[10], brand: r[11], model: r[12], watchStatus: r[13],
+  })));
+});
+
+// A single ordered part with its repair's customer/model.
+app.get('/api/parts/ordered/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  const results = db.exec(`
+    SELECT p.id, p.watchId, p.partNumber, p.description, p.vendor, p.dateOrdered, p.received, p.cost, p.notes, p.createdAt,
+           w.customerName, w.brand, w.model, w.status
+    FROM part p
+    JOIN watch w ON p.watchId = w.id
+    WHERE p.id = ${id}
+  `);
+  if (!results.length || !results[0].values.length) return res.status(404).json({ error: 'Not found' });
+  const r = results[0].values[0];
+  res.json({
+    id: r[0], watchId: r[1], partNumber: r[2], description: r[3], vendor: r[4],
+    dateOrdered: r[5], received: r[6], cost: r[7], notes: r[8], createdAt: r[9],
+    customerName: r[10], brand: r[11], model: r[12], watchStatus: r[13],
+  });
+});
+
 app.post('/api/watches/:id/parts', (req, res) => {
   const watchId = parseInt(req.params.id);
   const { partNumber, description, vendor, dateOrdered, cost, notes } = req.body;
